@@ -24,37 +24,25 @@ from flood_adapt.config.config import Settings
 
 
 def setup_lookup_table(
-        DATA_DIR, site, 
-        name_event_set, 
-        slr=np.arange(0, 1.1, 0.25), 
-        unit = "meters", 
-        fp_height = 0.5, 
-        timestep=1, 
-        run_scenarios=False) -> xr.Dataset:
+        fa: FloodAdapt, 
+        name_event_set: str, 
+        slr: np.array = np.arange(0, 1.1, 0.25), 
+        unit: UnitTypesLength = UnitTypesLength.meters, 
+        fp_height: float = 0.5, 
+        timestep: float=1, 
+        run_scenarios: bool=False) -> xr.Dataset:
 
 
-    # Initialize FloodAdapt
-    fn_event_set = DATA_DIR / site / "input" / "events" / name_event_set / f"{name_event_set}.toml"
-    settings = Settings(
-        DATABASE_ROOT=DATA_DIR,
-        DATABASE_NAME=site,
-        SFINCS_BIN_PATH=Path(r"c:\Users\winter_ga\Offline_data\FloodAdapt-Database\system\win-64\sfincs_v.2.1_alpha\sfincs.exe"),
-        FIAT_BIN_PATH=Path(r"c:\Users\winter_ga\Offline_data\FloodAdapt-Database\system\win-64\fiat_v0.2.1\fiat.exe"),
-        VALIDATE_BINARIES=True,
-    )
-    fa = FloodAdapt(database_path=settings.database_path
-                    )
-
+    fn_event_set = fa.database.database_path / fa.database.site.name / "input" / "events" / name_event_set / f"{name_event_set}.toml"
     event_set = EventSet.load_file(fn_event_set)
     events = []
 
     # Copy sub_events directories to events folder
-    eventset_folder = DATA_DIR / site / "input" / "events"
     for sub in event_set.sub_events:
         if sub.frequency <= timestep:
             events.append(sub.name)
-            src_dir = DATA_DIR / site / "input" / "events" / name_event_set / sub.name
-            dst_dir = DATA_DIR / site / "input" / "events" / sub.name
+            src_dir = fa.database.database_path / fa.database.site.name / "input" / "events" / name_event_set / sub.name
+            dst_dir = fa.database.database_path / fa.database.site.name / "input" / "events" / sub.name
             
             if src_dir.exists() and src_dir.is_dir():
                 shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
@@ -94,7 +82,7 @@ def setup_lookup_table(
     try: 
         fa.save_measure(flood_proof)
     except AlreadyExistsError:
-        print("Strategy already exists in database")
+        print(f"Measure {flood_proof.name} already exists in database")
 
     strategies = [
         Strategy(
@@ -113,7 +101,7 @@ def setup_lookup_table(
         try: 
             fa.save_strategy(strat)
         except AlreadyExistsError:
-            print("Strategy already exists in database")
+            print(f"Strategy {strat.name} already exists in database")
 
     # Create and save scenarios for all combinations of events, projections, and strategies
     scenarios = []
@@ -130,7 +118,7 @@ def setup_lookup_table(
                 try: 
                     fa.save_scenario(scen)
                 except AlreadyExistsError:
-                    print("Scenario already exists in database")
+                    print(f"Scenario {scen.name} already exists in database")
                 scenarios.append(scen)
 
     # run scenarios
@@ -144,31 +132,32 @@ def setup_lookup_table(
     scen_name=f"{projections[0].name}_{events[0]}_{strategies[0].name}"
     gdf_temp = fa.get_building_footprint_impacts(scen_name)
 
+
     ds_impacts = xr.Dataset(coords={
             "object_id": pd.to_numeric(gdf_temp["Object ID"], errors="coerce").astype("Int64"),
             "slr": slr, 
-            "strategy": [s.name for s in strategies]
+            "strategy": [s.name for s in strategies],
+            "event": events
             },
             data_vars={
                 "inun_depth": (
-                    ["object_id", "slr", "strategy"], 
-                    np.empty([len(gdf_temp["Object ID"]), len(slr), len(strategies)])
+                    ["object_id", "slr", "strategy", "event"], 
+                    np.empty([len(gdf_temp["Object ID"]), len(slr), len(strategies),len(events)])
                 ),
                 "total_damage": (
-                    ["object_id", "slr", "strategy"],
-                    np.empty([len(gdf_temp["Object ID"]), len(slr), len(strategies)])
+                    ["object_id", "slr", "strategy", "event"],
+                    np.empty([len(gdf_temp["Object ID"]), len(slr), len(strategies),len(events)])
                 )
             }
     )
-    ds_impacts
 
     for strat in strategies:
         for proj in projections:
             for event_name in events:
                 scen_name=f"{proj.name}_{event_name}_{strat.name}"
                 gdf_impacts = fa.get_building_footprint_impacts(scen_name)
-                ds_impacts["inun_depth"].loc[:, proj.physical_projection.sea_level_rise.value, strat.name] = gdf_impacts["Inundation Depth"].values
-                ds_impacts["total_damage"].loc[:, proj.physical_projection.sea_level_rise.value, strat.name] = gdf_impacts["Total Damage"].values
+                ds_impacts["inun_depth"].loc[:, proj.physical_projection.sea_level_rise.value, strat.name,event_name] = gdf_impacts["Inundation Depth"].values
+                ds_impacts["total_damage"].loc[:, proj.physical_projection.sea_level_rise.value, strat.name,event_name] = gdf_impacts["Total Damage"].values
 
     return ds_impacts
 
