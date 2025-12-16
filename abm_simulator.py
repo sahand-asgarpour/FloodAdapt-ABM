@@ -58,7 +58,7 @@ class ABMSimulator:
             strategy: str, strategy applied to all objects
             method: interpolation method ('linear', 'nearest', etc.)
         Returns:
-            damages: np.ndarray of shape (n_events, n_slr_values, n_households)
+            damages: np.ndarray of shape (n_households, n_events, n_slr_values)
         """
     
         slr_sim = self.ds_impacts['slr'].values
