@@ -3,7 +3,7 @@ import warnings
 
 class ABMSimulator:
 
-    def __init__(self, ds_impacts, times, slr_values, no_seq, damage_threshold=0.3, seed=42, dmg_unit="$", slr_unit="feet"):
+    def __init__(self, ds_impacts, times, slr_values, no_seq, damage_threshold=0.3, seed=42, dmg_unit="$", slr_unit="feet", damage_dtype=np.int32):
         self.ds_impacts = ds_impacts
         self.times = times
         self.dt = self.times[1] - self.times[0]
@@ -18,6 +18,8 @@ class ABMSimulator:
         self.max_pot_dmg = ds_impacts.object_id.attrs['max_pot_dmg']
         self.dmg_unit = dmg_unit
         self.slr_unit = slr_unit
+        # Controls the dtype used for storing damage history (e.g., np.float32 or an integer dtype)
+        self.damage_dtype = damage_dtype
         # Generate event sequences
         self.sequences = self.generate_event_sequences()
 
@@ -82,6 +84,7 @@ class ABMSimulator:
         Returns:
             damage_matrix: np.ndarray of shape (n_households, n_events, n_slr_values)
         """
+        print(f"[LOOKUP] Interpolating damage matrix for strategy '{strategy}' using method '{method}'...")
         slr_sim = self.ds_impacts['slr'].values
         n_objects = self.n_households
         damage_matrix = np.empty((n_objects, len(event_names_list), len(slr_values)))
@@ -231,7 +234,8 @@ class ABMSimulator:
                 continue
             for i, event in enumerate(events):
                 color = event2color[event]
-                ax_events.scatter(t, i*0.5, color=color, s=60, marker='o', edgecolor='k', zorder=3)
+                # Stack events vertically at the same timestep with unit spacing to avoid overlap
+                ax_events.scatter(t, i, color=color, s=60, marker='o', edgecolor='k', zorder=3)
 
         # Set y-ticks for event axis to show up to max number of events
         max_stack = max(len(events) for events in seq)
@@ -280,10 +284,13 @@ class ABMSimulator:
         # Add horizontal colorbar for event frequency above the event plot
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
-        freq_ticks = np.unique(event_freqs)
-        min_tick = np.min(freq_ticks)
-        max_tick = np.max(freq_ticks)
-        n_ticks = 6 if len(freq_ticks) < 6 else len(freq_ticks)
+        # Show a small, fixed number of ticks evenly spaced between min/max (log scale)
+        min_tick = float(np.min(event_freqs))
+        max_tick = float(np.max(event_freqs))
+        # Ensure positive range for log-space
+        min_tick = max(min_tick, 1e-12)
+        max_tick = max(max_tick, min_tick * 1.000000001)
+        n_ticks = 4  # desired number of ticks (3-4 as requested)
         all_ticks = np.logspace(np.log10(min_tick), np.log10(max_tick), n_ticks)
         cbar = plt.colorbar(sm, cax=cax, orientation='horizontal')
         cbar.set_ticks(np.log10(all_ticks))
@@ -454,7 +461,7 @@ class ABMSimulator:
             floodproofed: [sequence, household, time] boolean array (None if floodproofing is False)
         """
         event_names_list = list(self.event_names)
-        damage_history = np.zeros((self.no_seq, self.n_households, self.time_steps), dtype=np.float64)
+        damage_history = np.zeros((self.no_seq, self.n_households, self.time_steps), dtype=self.damage_dtype)
         floodproofed = np.zeros((self.no_seq, self.n_households, self.time_steps), dtype=bool) if floodproofing else None
 
         # full matrix lookups for no measures and floodproofing all (n_objects, n_events, n_slr_values)
@@ -486,7 +493,11 @@ class ABMSimulator:
                             damages_floodproofing_all = damage_matrix_floodproofing_all[:, event_idx, ti]
                             damages = np.where(is_floodproofed, damages_floodproofing_all, damages)
                         total_damage += damages
-                damage_history[seq_idx, :, ti] = total_damage
+                # Cast to configured dtype; round if integer dtype to avoid silent truncation
+                if np.issubdtype(self.damage_dtype, np.integer):
+                    damage_history[seq_idx, :, ti] = np.rint(total_damage).astype(self.damage_dtype)
+                else:
+                    damage_history[seq_idx, :, ti] = total_damage.astype(self.damage_dtype)
                 if floodproofing:
                     floodproofed[seq_idx, :, ti] = is_floodproofed
                     # Vectorized floodproofing decision

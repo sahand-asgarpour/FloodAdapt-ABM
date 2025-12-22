@@ -1,3 +1,4 @@
-event_sequences.png
+*.png
 *.nc
+*.pyc
 

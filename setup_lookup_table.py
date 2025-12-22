@@ -104,6 +104,7 @@ def create_combinations_matrix(fa, name_event_set, slr, unit, fp_height):
 
 # 2. Save these in the FloodAdapt database
 def save_combinations_to_database(fa, projections, strategies, scenarios, flood_proofs):
+    scenarios_existing = fa.get_scenarios()["name"]
     for proj in projections:
         try:
             fa.save_projection(proj)
@@ -120,13 +121,56 @@ def save_combinations_to_database(fa, projections, strategies, scenarios, flood_
         except AlreadyExistsError:
             print(f"Strategy {strat.name} already exists in database")
     for scen in scenarios:
-        try:
+        if scen.name not in scenarios_existing:
             fa.save_scenario(scen)
-        except AlreadyExistsError:
-            print(f"Scenario {scen.name} already exists in database")
+
+# Helper: delete non-impact files up to a depth of 2 within a scenario folder
+def _cleanup_scenario_outputs(
+    fa: FloodAdapt,
+    scen_name: str,
+    keep_substring: str | list[str] | tuple[str, ...] = "Impacts_building_footprints",
+    max_depth: int = 2,
+) -> None:
+    """Delete files inside a scenario output folder except those matching substrings.
+
+    Parameters
+    - fa: FloodAdapt instance
+    - scen_name: Scenario name (folder under scenarios/output)
+    - keep_substring: A single substring or a list/tuple of substrings. Any file whose
+      name contains at least one of these substrings will be kept.
+    - max_depth: Maximum directory depth to traverse from the scenario folder.
+    """
+
+    base: Path = fa.database.scenarios.output_path / scen_name
+    if not base.exists() or not base.is_dir():
+        return
+
+    # Normalize to a list of substrings to keep
+    if isinstance(keep_substring, str):
+        keep_list = [keep_substring]
+    else:
+        keep_list = list(keep_substring)
+
+    def walk_dir(p: Path, depth: int) -> None:
+        try:
+            for child in p.iterdir():
+                if child.is_dir():
+                    if depth < max_depth:
+                        walk_dir(child, depth + 1)
+                else:
+                    # Keep file if any of the substrings is present in the filename
+                    if not any(sub in child.name for sub in keep_list):
+                        try:
+                            child.unlink()
+                        except Exception as e:
+                            print(f"Could not delete {child}: {e}")
+        except Exception as e:
+            print(f"Could not iterate {p}: {e}")
+
+    walk_dir(base, 0)
 
 # 3. Run all scenarios
-def run_scenarios(fa, scenarios):
+def run_scenarios(fa, scenarios, clean=True):
     scenarios_db = pd.DataFrame(fa.get_scenarios())
     for scen in scenarios:
         print(scen.name)
@@ -134,6 +178,9 @@ def run_scenarios(fa, scenarios):
             fa.run_scenario(scen.name)
         else:
             print(f"Scenario {scen.name} already run.")
+        # Cleanup: keep only files with "Impacts_building_footprints" up to depth 2
+        if clean:
+            _cleanup_scenario_outputs(fa, scen.name, keep_substring=["max_water_level_map.nc", "finished.txt", "Impacts_building_footprints"], max_depth=2)
 
 # 4. Read results and return the dataset
 def read_impacts_dataset(fa, projections, strategies, events, slr, events_freq=None):
