@@ -172,14 +172,14 @@ class DecisionConfig:
         Default: ``3``.
     """
 
-    risk_aversion: float = 1.5
-    discount_rate: float = 0.04
+    risk_aversion: float = 1.0
+    discount_rate: float = 0.032
     decision_horizon: int = 15
     risk_perc_min: float = 0.01
     risk_perc_max: float = 2.0
     risk_perc_coef: float = -3.6
     loan_duration: int = 16
-    interest_rate: float = 0.03
+    interest_rate: float = 0.04
     adaptation_cost_fraction: float = 0.10
     expenditure_cap: float = 0.06
     amenity_weight: float = 1.0

@@ -345,13 +345,14 @@ class DynamoDecisionBridge:
         )
 
         # -- Decision --------------------------------------------------------
-        should_adapt: np.ndarray = (
-            (eu_adapt > eu_do_nothing)
-            & (~self.is_adapted)
-        )
+        # Store these on the instance purely so trace scripts can inspect them
+        self._eu_do_nothing = eu_do_nothing.copy()
+        self._eu_adapt = eu_adapt.copy()
 
-        newly_adapted: np.ndarray = should_adapt.copy()
-        self.is_adapted = self.is_adapted | should_adapt
+        eu_diff = eu_adapt - eu_do_nothing
+        newly_adapted: np.ndarray = (eu_diff > 0) & (~self.is_adapted)
+        self.is_adapted[newly_adapted] = True
+
         return newly_adapted
 
     def get_current_damages(

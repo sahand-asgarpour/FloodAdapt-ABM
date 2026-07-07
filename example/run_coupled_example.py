@@ -167,23 +167,25 @@ def _simulate_year_events(
     """
     event_names: np.ndarray = bridge._event_names
     event_freqs: np.ndarray = bridge._event_freqs
-
+    # TODO: Refactor this stochastic event drawing and capping logic OUT of the example script 
+    # and integrate it natively into DynamoDecisionBridge or ABMSimulator.
     # Independent Bernoulli trials for each event (FloodAdapt-ABM approach)
-    occurred_with_freq: list[tuple[str, float]] = []
+    occurred_list: list[str] = []
     for name, freq in zip(event_names, event_freqs):
         # Bernoulli trial: probability of occurrence = freq * dt (dt=1 year)
         prob = min(freq, 1.0)
         if rng.random() < prob:
-            occurred_with_freq.append((str(name), freq))
+            occurred_list.append(str(name))
             
     # Apply the max_events_per_year cap
     max_events = bridge._dec.max_events_per_year
-    if len(occurred_with_freq) > max_events:
-        # Sort by frequency descending (most probable events first)
-        occurred_with_freq.sort(key=lambda x: x[1], reverse=True)
-        occurred_with_freq = occurred_with_freq[:max_events]
+    if len(occurred_list) > max_events:
+        # Randomly sample N events from the drawn pool to preserve unbiased distribution
+        # We reuse the existing deterministic `rng` to keep it reproducible
+        indices = rng.choice(len(occurred_list), size=max_events, replace=False)
+        occurred_list = [occurred_list[i] for i in indices]
         
-    occurred = [evt for evt, _ in occurred_with_freq]
+    occurred = occurred_list
 
     # Aggregate per-agent damages to determine who flooded
     total_dmg = np.zeros(bridge.n_agents, dtype=np.float32)
@@ -323,11 +325,18 @@ def run() -> None:
     # -----------------------------------------------------------------------
     # 3.  Year-by-year simulation
     # -----------------------------------------------------------------------
+    # TODO: Refactor this time step progression loop. It is currently hardcoded 
+    # here for demonstration, but time step progression must be natively handled 
+    # by the ABM repo (e.g. ABMSimulator or Mesa model integration).
     rng = np.random.default_rng(RANDOM_SEED + 1)
 
     # Accumulators for summary stats
     total_adapted_history: dict[int, int] = {}
     total_damage_history: dict[int, float] = {}
+    cum_damage_history: dict[int, float] = {}
+    
+    # Cumulative damage array per agent
+    cum_dmg = np.zeros(bridge.n_agents, dtype=np.float32)
 
     for year in DEMO_YEARS:
         _header(f"SIMULATING YEAR {year}", width=50)
@@ -368,6 +377,8 @@ def run() -> None:
             f"  Total damage    : ${total_dmg_year.sum():,.0f}"
         )
         total_damage_history[year] = float(total_dmg_year.sum())
+        cum_dmg += total_dmg_year
+        cum_damage_history[year] = float(cum_dmg.sum())
 
         if occurred_events:
             print(
@@ -416,6 +427,7 @@ def run() -> None:
             agent_indices=tracked_indices,
             extra_cols={
                 "dmg_this_yr": total_dmg_year,
+                "cum_dmg": cum_dmg,
                 "ead_no_meas": ead_no_meas,
             },
             cohort_labels=cohort_labels,
@@ -425,14 +437,17 @@ def run() -> None:
     # 4.  Summary
     # -----------------------------------------------------------------------
     _header("SUMMARY")
-    print(f"  {'Year':>6}  {'SLR (ft)':>10}  {'Total Damage':>15}  {'Adapted (cum.)':>16}")
-    print("  " + "-" * 54)
-    for yr in DEMO_YEARS:
+    print(f"  {'Year':>6}  {'SLR (ft)':>10}  {'Total Damage':>15}  {'Cum Damage':>15}  {'Adapted (cum.)':>16}")
+    print("  " + "-" * 70)
+    for year in DEMO_YEARS:
+        slr_ft = round(((year - INITIAL_YEAR) / TIME_HORIZON) * cfg.environment.max_slr, 4)
         print(
-            f"  {yr:>6}  {slr_trajectory(yr):>10.3f}  "
-            f"${total_damage_history[yr]:>14,.0f}  "
-            f"{total_adapted_history[yr]:>14,}"
+            f"  {year:>6d}  {slr_ft:>10.4f}  "
+            f"${total_damage_history[year]:>14,.0f}  "
+            f"${cum_damage_history[year]:>14,.0f}  "
+            f"{total_adapted_history[year]:>16,d}"
         )
+
 
     ds.close()
 
