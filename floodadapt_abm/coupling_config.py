@@ -112,14 +112,14 @@ class DecisionConfig:
         CRRA risk-aversion coefficient (sigma).  ``sigma == 1`` activates
         log-utility; ``sigma != 1`` uses power-utility
         ``U(x) = x^(1-sigma) / (1-sigma)``.
-        Default: ``1.5`` (moderate risk aversion, from DYNAMO-M calibration).
+        Default: ``1.0`` (log-utility; from DYNAMO-M ``settings.yml``).
     discount_rate : float
         Annual time-discounting rate ``r`` used in NPV calculations.
-        Default: ``0.04`` (4 %, a common social discount rate).
+        Default: ``0.032`` (3.2 %, from DYNAMO-M ``decisions.time_discounting``).
     decision_horizon : int
         Planning horizon ``T`` in years over which households discount future
         flood damages.
-        Default: ``10`` years.
+        Default: ``15`` years (from DYNAMO-M ``decisions.decision_horizon``).
     risk_perc_min : float
         Minimum flood risk perception multiplier.  Households that have not
         experienced a flood for a long time converge to this value.
@@ -139,7 +139,7 @@ class DecisionConfig:
         Default: ``16`` years (from DYNAMO-M settings).
     interest_rate : float
         Interest rate ``r_loan`` applied to the annualised adaptation loan.
-        Default: ``0.03`` (3 %).
+        Default: ``0.04`` (4 %, from DYNAMO-M ``adaptation.interest_rate``).
     adaptation_cost_fraction : float
         Fraction of ``max_pot_dmg`` used as the total (one-off) adaptation
         cost per building when external cost data are unavailable.
@@ -167,9 +167,17 @@ class DecisionConfig:
     max_events_per_year : int
         Maximum number of stochastic flood events that can occur in a
         single simulation year.  When the Bernoulli-trial draw yields
-        more events than this cap, only the ``max_events_per_year``
-        highest-frequency (most probable) events are retained.
-        Default: ``3``.
+        more events than this cap, the surplus events are dropped.
+
+        .. note::
+           Cap-selection semantics are being unified (see
+           ``20260707_todo_next_steps``).  Historically the retained events
+           were the highest-frequency ones; the current example scripts
+           retain the highest-magnitude (largest expected-damage) events;
+           the agreed target is **random selection without replacement** from
+           the drawn pool, which preserves the Monte-Carlo distribution.
+           Whichever policy is active, the count is capped at this value.
+        Default: ``4``.
     """
 
     risk_aversion: float = 1.0

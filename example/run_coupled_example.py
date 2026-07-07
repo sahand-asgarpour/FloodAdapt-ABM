@@ -440,7 +440,7 @@ def run() -> None:
     print(f"  {'Year':>6}  {'SLR (ft)':>10}  {'Total Damage':>15}  {'Cum Damage':>15}  {'Adapted (cum.)':>16}")
     print("  " + "-" * 70)
     for year in DEMO_YEARS:
-        slr_ft = round(((year - INITIAL_YEAR) / TIME_HORIZON) * cfg.environment.max_slr, 4)
+        slr_ft = slr_trajectory(year)
         print(
             f"  {year:>6d}  {slr_ft:>10.4f}  "
             f"${total_damage_history[year]:>14,.0f}  "
