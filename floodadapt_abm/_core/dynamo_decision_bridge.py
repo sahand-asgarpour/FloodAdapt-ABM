@@ -40,7 +40,7 @@ import numpy as np
 import xarray as xr
 
 from floodadapt_abm.coupling_config import CouplingConfig, DecisionConfig, NetCDFMappingConfig
-from floodadapt_abm.lookup_utils import interpolate_damage_at_slr
+from floodadapt_abm._core.lookup_utils import interpolate_damage_at_slr
 
 
 # ---------------------------------------------------------------------------

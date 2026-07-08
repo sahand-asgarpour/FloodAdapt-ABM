@@ -28,12 +28,12 @@ import pytest
 import xarray as xr
 
 from floodadapt_abm import CouplingConfig, DecisionConfig, NetCDFMappingConfig
-from floodadapt_abm import DynamoDecisionBridge
-from floodadapt_abm.dynamo_decision_bridge import (
+from floodadapt_abm._core import (
+    DynamoDecisionBridge,
     _calc_eu_adapt,
     _calc_eu_do_nothing,
-    _iterate_through_flood,
 )
+from floodadapt_abm._core.dynamo_decision_bridge import _iterate_through_flood
 
 
 # ===========================================================================
@@ -775,7 +775,7 @@ class TestEventCapping:
     """Integration test for the event capping logic in the example script."""
     
     def test_max_events_cap(self) -> None:
-        from example.run_coupled_example import _simulate_year_events
+        from examples_engine.old_bridge_examples.run_coupled_example import _simulate_year_events
         
         ds = _make_mock_dataset(n_objects=2, n_events=10)
         cfg = CouplingConfig(decision=DecisionConfig(max_events_per_year=2))

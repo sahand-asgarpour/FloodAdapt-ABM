@@ -4,15 +4,22 @@ floodadapt_abm
 FloodAdapt-ABM: agent-based flood adaptation simulation coupled with
 the DYNAMO-M Subjective Expected Utility decision framework.
 
-Key public classes
-------------------
+Public API
+----------
+SimulationEngine (recommended)
+    Unified simulation engine with pluggable decision rules
+    (Strategy Pattern).  Owns time, data plumbing, event generation, and
+    lifespan-dryproof reset logic.  Use this for new code.
 ABMSimulator
-    Monte-Carlo threshold-rule simulator (stage 2 pipeline).
-DynamoDecisionBridge
-    SEU-based decision bridge coupling the NetCDF lookup table with
-    DYNAMO-M utility functions.
+    **Deprecated** legacy threshold-rule simulator (stage-2 pipeline),
+    retained for backward compatibility and the Gate-1 regression test.
+    New code should use ``SimulationEngine`` + ``ThresholdRule`` instead.
+DecisionRule / ThresholdRule / SEURule
+    Pluggable decision rules for ``SimulationEngine``.
+AgentState
+    Per-agent state container for the engine.
 CouplingConfig / DecisionConfig / NetCDFMappingConfig
-    Configuration dataclasses for the bridge.
+    Configuration dataclasses.
 
 Note on setup_lookup_table
 --------------------------
@@ -23,20 +30,39 @@ available in all environments (e.g. the ``dynamom`` conda env).
 Import it explicitly when needed::
 
     from floodadapt_abm.setup_lookup_table import create_lookup_table
+
+Internal plumbing (_core, not recommended for direct use)
+---------------------------------------------------------
+DynamoDecisionBridge
+    Internal data-plumbing layer; composed by ``SimulationEngine``.
 """
 
 from floodadapt_abm.abm_simulator import ABMSimulator
-from floodadapt_abm.dynamo_decision_bridge import DynamoDecisionBridge
 from floodadapt_abm.coupling_config import (
     CouplingConfig,
     DecisionConfig,
     NetCDFMappingConfig,
 )
+from floodadapt_abm.agent_state import AgentState
+from floodadapt_abm.decision_rule import DecisionRule, ThresholdRule, SEURule
+from floodadapt_abm.simulation_engine import SimulationEngine
+from floodadapt_abm.event_utils import draw_year_events, generate_event_sequences
+
+# For backward compat: DynamoDecisionBridge moved to _core, but re-export here
+from floodadapt_abm._core import DynamoDecisionBridge
 
 __all__ = [
+    "SimulationEngine",
     "ABMSimulator",
-    "DynamoDecisionBridge",
+    "DecisionRule",
+    "ThresholdRule",
+    "SEURule",
+    "AgentState",
     "CouplingConfig",
     "DecisionConfig",
     "NetCDFMappingConfig",
+    "draw_year_events",
+    "generate_event_sequences",
+    "DynamoDecisionBridge",  # backward compat
 ]
+

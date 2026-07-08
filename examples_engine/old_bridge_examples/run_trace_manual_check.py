@@ -179,7 +179,7 @@ def _draw_events_traced(
     print(f"    {'-' * 75}")
 
     print("    (Note: Only showing drawn 'Hit' events to save space)")
-    # TODO: Refactor this stochastic event drawing and capping logic OUT of the example script 
+    # Done: Refactor this stochastic event drawing and capping logic OUT of the example script
     # and integrate it natively into DynamoDecisionBridge or ABMSimulator.
     occurred_list: list[str] = []
     for name, freq in zip(event_names, event_freqs):

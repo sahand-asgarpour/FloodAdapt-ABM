@@ -178,6 +178,15 @@ class DecisionConfig:
            the drawn pool, which preserves the Monte-Carlo distribution.
            Whichever policy is active, the count is capped at this value.
         Default: ``4``.
+    lifespan_dryproof : int
+        Service life of a dry-floodproofing measure in years.  Adapted
+        households whose adaptation age (``time_adapted``) reaches this value
+        have their floodproofing expire (``is_adapted`` reset to ``False``)
+        and re-enter the decision each subsequent year.  Ported from
+        DYNAMO-M's agent layer (``coastal_nodes.py`` lines 2221-2227,
+        ``self.adapt[self.time_adapt == lifespan_dryproof] = 0``), where the
+        default is ``settings.yml`` ``adaptation.lifespan_dryproof``.
+        Default: ``75`` years.
     """
 
     risk_aversion: float = 1.0
@@ -194,6 +203,7 @@ class DecisionConfig:
     error_interval: float = 0.0
     income_to_wealth_ratio: float = 4.14
     max_events_per_year: int = 4
+    lifespan_dryproof: int = 75
 
 
 # ---------------------------------------------------------------------------

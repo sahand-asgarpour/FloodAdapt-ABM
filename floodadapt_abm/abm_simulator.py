@@ -1,15 +1,44 @@
+"""
+abm_simulator.py
+================
+.. deprecated:: Phase 3
+    ``ABMSimulator`` is the **legacy** pre-refactor threshold-rule simulator.
+    It is superseded by :class:`floodadapt_abm.simulation_engine.SimulationEngine`
+    with a pluggable :class:`~floodadapt_abm.decision_rule.DecisionRule`
+    (use ``ThresholdRule`` to reproduce this class's 0.3-threshold behaviour, or
+    ``SEURule`` for the DYNAMO-M science).
+
+    It is intentionally **kept importable** (not moved into ``_core/``) because it
+    is still a public/legacy API actively referenced by:
+
+    * ``2_simulate_adaptation.ipynb`` (the legacy stage-2 notebook), and
+    * the Gate-1 regression test, which asserts that ``ThresholdRule`` reproduces
+      this class's damage/adaptation formula bit-for-bit.
+
+    New code should use ``SimulationEngine``.  See
+    ``examples_engine/run_coupled_example_engine.py``.
+"""
 import numpy as np
 import warnings
 
-from floodadapt_abm.lookup_utils import (
-    interpolate_damage_at_slr,
+from floodadapt_abm._core.lookup_utils import (
     interpolate_damage_matrix as _lu_interpolate_damage_matrix,
 )
 
 
 class ABMSimulator:
+    """Legacy threshold-rule ABM simulator (deprecated; see module docstring)."""
 
     def __init__(self, ds_impacts, times, slr_values, no_seq, damage_threshold=0.3, seed=42, dmg_unit="$", slr_unit="feet", damage_dtype=np.int32):
+        warnings.warn(
+            "ABMSimulator is deprecated and retained only for backward "
+            "compatibility (legacy notebook + Gate-1 regression test). Use "
+            "floodadapt_abm.SimulationEngine with a DecisionRule "
+            "(ThresholdRule reproduces the 0.3-threshold behaviour; SEURule for "
+            "the DYNAMO-M SEU science).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.ds_impacts = ds_impacts
         self.times = times
         self.dt = self.times[1] - self.times[0]

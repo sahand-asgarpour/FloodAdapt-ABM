@@ -11,20 +11,39 @@ All source code is stored under the `floodadapt_abm/` directory:
 ```
 FloodAdapt-ABM/
 ├── floodadapt_abm/
-│   ├── __init__.py              # Package exports
-│   ├── abm_simulator.py         # Main simulator logic (threshold-based)
-│   ├── dynamo_decision_bridge.py # DYNAMO-M SEU coupling bridge
-│   ├── coupling_config.py       # Configuration schemas (dataclasses)
-│   ├── lookup_utils.py          # Shared NetCDF & SLR interpolation utilities
-│   └── setup_lookup_table.py    # FloodAdapt stage 1 combinations matrix generator
-├── example/
-│   └── run_coupled_example.py       # Demonstration of coupled DYNAMO-M bridge run
-├── tests/
-│   └── test_dynamo_decision_bridge.py # Core unit tests
-├── pyproject.toml                   # Standard package configuration & metadata
-├── environment.yml                  # Conda environment definition
-└── README.md                        # Installation & usage guide
+│   ├── __init__.py                    # Public API exports (SimulationEngine recommended)
+│   ├── _core/                         # Internal data-plumbing layer (not public)
+│   │   ├── dynamo_decision_bridge.py # DYNAMO-M SEU coupling (internal composition)
+│   │   └── lookup_utils.py           # NetCDF & SLR interpolation utilities (internal)
+│   ├── simulation_engine.py           # ⭐ RECOMMENDED: Unified engine (Phase 2+3)
+│   ├── decision_rule.py               # Pluggable rules: DecisionRule ABC, ThresholdRule, SEURule
+│   ├── agent_state.py                 # Per-agent state container
+│   ├── event_utils.py                 # Unified event drawing (Bernoulli + random-pool cap)
+│   ├── coupling_config.py             # Configuration dataclasses
+│   ├── abm_simulator.py               # Legacy simulator (threshold-based, backward compat)
+│   └── setup_lookup_table.py          # FloodAdapt stage 1 combinations matrix generator
+├── examples_engine/                   # ⭐ RECOMMENDED: SimulationEngine examples
+│   ├── run_coupled_example_engine.py # SEURule vs ThresholdRule demo
+│   ├── run_coupled_example.py         # (legacy bridge-based, reference only)
+│   ├── run_trace_manual_check.py      # (legacy bridge-based, reference only)
+│   └── README.md                      # Usage guide & architecture
+├── old_bridge_examples/               # DEPRECATED: Original bridge-based examples
+│   ├── run_coupled_example.py         # (moved from example/, kept for reference)
+│   ├── run_trace_manual_check.py      # (moved from example/, kept for reference)
+│   └── README.md                      # Migration guide
+├── tests/                             # Test suite
+│   ├── conftest.py                   # Shared test fixtures (mock datasets)
+│   ├── test_event_utils.py           # Event drawing tests
+│   ├── test_agent_state.py           # AgentState tests
+│   ├── test_decision_rule.py         # DecisionRule parity tests (gates)
+│   ├── test_simulation_engine.py     # SimulationEngine tests
+│   └── test_dynamo_decision_bridge.py # Bridge regression tests (43 tests)
+├── pyproject.toml                     # Standard package configuration & metadata
+├── environment.yml                    # Conda environment definition (optional)
+└── README.md                          # This file
 ```
+
+**Key note**: The old `example/` folder is now `old_bridge_examples/` and should not be used for new projects. Use `examples_engine/` instead.
 
 ---
 

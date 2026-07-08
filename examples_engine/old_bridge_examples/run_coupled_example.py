@@ -144,7 +144,6 @@ def _simulate_year_events(
     rng: np.random.Generator,
 ) -> tuple[list[str], np.ndarray]:
     """
-    ToDo: this should be replaced with the one in the floodadapt_abm repo
     Stochastically draw flood events for a single year from the dataset
     using each event's annual frequency.
 
@@ -167,7 +166,7 @@ def _simulate_year_events(
     """
     event_names: np.ndarray = bridge._event_names
     event_freqs: np.ndarray = bridge._event_freqs
-    # TODO: Refactor this stochastic event drawing and capping logic OUT of the example script 
+    # Done: Refactor this stochastic event drawing and capping logic OUT of the example script
     # and integrate it natively into DynamoDecisionBridge or ABMSimulator.
     # Independent Bernoulli trials for each event (FloodAdapt-ABM approach)
     occurred_list: list[str] = []
@@ -325,7 +324,7 @@ def run() -> None:
     # -----------------------------------------------------------------------
     # 3.  Year-by-year simulation
     # -----------------------------------------------------------------------
-    # TODO: Refactor this time step progression loop. It is currently hardcoded 
+    # Done: Refactor this time step progression loop. It is currently hardcoded
     # here for demonstration, but time step progression must be natively handled 
     # by the ABM repo (e.g. ABMSimulator or Mesa model integration).
     rng = np.random.default_rng(RANDOM_SEED + 1)
