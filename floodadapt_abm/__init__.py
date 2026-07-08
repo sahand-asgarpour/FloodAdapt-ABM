@@ -51,12 +51,24 @@ from floodadapt_abm.event_utils import draw_year_events, generate_event_sequence
 # For backward compat: DynamoDecisionBridge moved to _core, but re-export here
 from floodadapt_abm._core import DynamoDecisionBridge
 
+# Phase 4a: live DYNAMO-M parity rule. Import is guarded so the package still
+# works when DYNAMO-M is not installed/importable (DYNAMO_M_AVAILABLE is False,
+# and constructing DynamoLiveRule then raises DynamoMNotAvailable).
+from floodadapt_abm.dynamo_live_rule import (
+    DynamoLiveRule,
+    DynamoMNotAvailable,
+    DYNAMO_M_AVAILABLE,
+)
+
 __all__ = [
     "SimulationEngine",
     "ABMSimulator",
     "DecisionRule",
     "ThresholdRule",
     "SEURule",
+    "DynamoLiveRule",
+    "DynamoMNotAvailable",
+    "DYNAMO_M_AVAILABLE",
     "AgentState",
     "CouplingConfig",
     "DecisionConfig",

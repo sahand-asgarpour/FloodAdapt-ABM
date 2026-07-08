@@ -1,129 +1,130 @@
-# Examples — SimulationEngine (Recommended)
+# Examples — `SimulationEngine` (learning path)
 
-This folder contains examples demonstrating the FloodAdapt-ABM coupling with the DYNAMO-M SEU decision framework.
+A guided, runnable tour of the FloodAdapt-ABM × DYNAMO-M coupling. The examples
+are **numbered in the order you should read them** and each ends by pointing at
+the next one.
 
-## Canonical Examples (Use These)
+> **They run anywhere.** By default the examples use a small, deterministic
+> *synthetic* "Charleston-like" lookup table (built in `_shared.py`), so you
+> need **no large data file and no DYNAMO-M checkout** to try them. See
+> [Using the real Charleston table](#using-the-real-charleston-table) to opt in.
 
-### `run_coupled_example_engine.py` ⭐ (Recommended)
-
-Unified `SimulationEngine` API demonstration:
-- Side-by-side comparison of `SEURule` (DYNAMO-M SEU science) and `ThresholdRule` (legacy heuristic)
-- Multi-year Charleston simulation
-- **Status**: Current, Phase 2+3 refactor
-- **Architecture**: `SimulationEngine` with pluggable `DecisionRule`
-
-```bash
-python run_coupled_example_engine.py
-```
-
-## Legacy Examples (For Reference Only)
-
-See **`old_bridge_examples/`** folder (moved from `example/`):
-
-- **`run_coupled_example.py`** — Original `DynamoDecisionBridge`-based example. **Not recommended for new code** — use `run_coupled_example_engine.py` instead. Manual year-by-year stepping using deprecated bridge API (internal-only as of Phase 2+3). Kept for backward compatibility & reference.
-
-- **`run_trace_manual_check.py`** — Manual trace/debugging example using the bridge. **Reference only** — not part of current workflow.
-
-**Migration path**: If you have code using the legacy bridge API, update imports:
-```python
-# OLD (still works, re-exported for compatibility)
-from floodadapt_abm import DynamoDecisionBridge
-
-# NEW (recommended)
-from floodadapt_abm import SimulationEngine
-```
-
----
-
-## Folder Structure
-
-```
-examples_engine/                        ← YOU ARE HERE (canonical examples)
-  ├── run_coupled_example_engine.py     ⭐ USE THIS
-  ├── README.md                         (this file)
-  └── old_bridge_examples/              ⚠️ DEPRECATED
-       ├── run_coupled_example.py       (legacy bridge API)
-       ├── run_trace_manual_check.py    (debug reference)
-       └── README.md                    (migration guide)
-```
-
----
-
-```
-SimulationEngine  (owns time, data, event drawing)
-  ├── _data: DynamoDecisionBridge  (internal data plumbing)
-  ├── decision_rule: DecisionRule  (pluggable: ThresholdRule or SEURule)
-  └── state: AgentState  (unified per-agent arrays)
-```
-
-### Decision Rules
-
-- **`SEURule`** — DYNAMO-M Subjective Expected Utility science (validated Phase 1). 
-  Adapts when EU(adapt) > EU(do_nothing).
-- **`ThresholdRule`** — Legacy ex-post heuristic. 
-  Adapts when realised damage > 0.3 × max_pot_dmg.
-- **Custom rules** — Inherit `DecisionRule`, implement `should_adapt(...)` to plug in new logic.
-
-### Key Features
-
-- **Unified event drawing**: All event generation flows through a single random-pool-capped Bernoulli draw (Phase 2 dedup).
-- **Lifespan-dryproof reset** (Phase 3): Measures age and expire (reset) after 75 years, enabling multi-generational dynamics matching native DYNAMO-M.
-- **Backward compatible**: Legacy `DynamoDecisionBridge` and `ABMSimulator` still work (internal use only).
-
-## Usage
-
-### Basic Run
-
-```python
-from floodadapt_abm import SimulationEngine, CouplingConfig, DecisionConfig
-import xarray as xr
-import numpy as np
-
-# Load lookup table
-ds = xr.open_dataset("path/to/lookup_table.nc")
-
-# Configure
-cfg = CouplingConfig(decision=DecisionConfig())
-
-# Create engine (SEURule by default)
-engine = SimulationEngine(ds=ds, config=cfg)
-
-# Run
-slr_trajectory = np.linspace(0, 2.0, 30)
-results = engine.run(slr_trajectory, no_seq=10, seed=42)
-
-# Access results
-damage_history = results["damage_history"]       # (no_seq, n_agents, n_years)
-adapted_history = results["adapted_history"]     # (no_seq, n_agents, n_years)
-adoption_fraction = results["adoption_fraction"] # (no_seq, n_years)
-```
-
-### Custom Rule
-
-```python
-from floodadapt_abm import SimulationEngine, DecisionRule
-import numpy as np
-
-class CustomRule(DecisionRule):
-    def should_adapt(self, agent_state, damages_this_year, damages_no_adapt,
-                     damages_adapt, event_freqs, max_pot_dmg, adaptation_costs):
-        # Your logic here
-        return np.zeros(agent_state.n_agents, dtype=bool)
-
-engine = SimulationEngine(ds=ds, config=cfg, decision_rule=CustomRule(cfg.decision))
-results = engine.run(slr_trajectory, no_seq=10)
-```
-
-## Testing
-
-All functionality is covered by the test suite:
+## Quick start
 
 ```bash
-pytest tests/ -v
+cd examples_engine
+python 01_quickstart.py
 ```
 
-- `test_event_utils.py` — Event generation (Bernoulli, random cap, reproducibility)
-- `test_agent_state.py` — Per-agent state container
-- `test_decision_rule.py` — Rule parity (ThresholdRule == legacy, SEURule == bridge)
-- `test_simulation_engine.py` — Engine plumbing, lifespan turnover, degenerate cases
+(Use the Python environment that has `floodadapt_abm` and its dependencies —
+`numpy`, `xarray`, `numba`, `scipy`, `pyyaml`.)
 
+## The examples
+
+| # | File | What it teaches |
+|---|------|-----------------|
+| 01 | `01_quickstart.py` | Smallest end-to-end run; result array shapes & meaning. Engine uses `SEURule` by default. |
+| 02 | `02_rules_comparison.py` | Strategy Pattern: swap `SEURule` ↔ `ThresholdRule` without touching the engine; EU diagnostics via `track_eu=True`. |
+| 03 | `03_custom_rule.py` | Open/Closed: write your own `DecisionRule` (`should_adapt`) and plug it in. |
+| 04 | `04_monte_carlo_uncertainty.py` | Why `no_seq` exists: average across sequences for expected outcomes + uncertainty (std). |
+| 05 | `05_dynamo_live_parity.py` | **Phase 4a**: `DynamoLiveRule` drives *native* DYNAMO-M as a parity oracle proving the ported `SEURule` has not drifted. Guarded/optional dependency. |
+
+`_shared.py` is a helper (not an example): it bootstraps `sys.path` and provides
+the dataset. You never need to run it directly.
+
+## Key concepts (as the examples demonstrate them)
+
+```
+SimulationEngine        owns TIME + DATA (NetCDF load, interpolation,
+  ├── _data             stochastic event draw, per-agent state, the year loop)
+  ├── decision_rule ◄── owns BEHAVIOUR — pluggable (Strategy Pattern):
+  │        ThresholdRule   legacy: adapt when realised damage > 0.3·max_pot_dmg
+  │        SEURule         DYNAMO-M SEU (ported); adapt when EU_adapt > EU_stay
+  │        DynamoLiveRule  Phase 4a: calls NATIVE DYNAMO-M (parity oracle)
+  │        <your rule>     inherit DecisionRule, implement should_adapt(...)
+  └── state: AgentState  wealth, income, risk_perception, flood_timer,
+                          is_adapted, time_adapted
+```
+
+* **Time** is driven by the length of the SLR trajectory you pass to
+  `engine.run(slr_values, ...)` — one value per year.
+* **`no_seq`** independent Monte-Carlo sequences each get a fresh `AgentState`
+  and their own random weather; aggregate across them for expected behaviour.
+* **`SEURule`** is *ex-ante* (forward-looking utility), **`ThresholdRule`** is
+  *ex-post* (reacts to realised damage) — hence example 04 uses the latter to
+  show adoption variance.
+
+## Minimal code (from `01_quickstart.py`)
+
+```python
+from floodadapt_abm import SimulationEngine, CouplingConfig
+import xarray as xr, numpy as np
+
+ds = xr.open_dataset("lookup_table.nc")
+engine = SimulationEngine(ds=ds, config=CouplingConfig())   # SEURule by default
+results = engine.run(np.linspace(0, 1.5, 30), no_seq=10, seed=42)
+
+results["damage_history"]      # (no_seq, n_agents, n_years)
+results["adapted_history"]     # (no_seq, n_agents, n_years) bool
+results["adoption_fraction"]   # (no_seq, n_years)
+```
+
+## Using the real Charleston table
+
+The real probabilistic lookup table (~61,858 objects × 207 events) is large and
+slow, so it is **opt-in**:
+
+```bash
+set FA_ABM_REAL_TABLE=1            # Windows (PowerShell: $env:FA_ABM_REAL_TABLE=1)
+python 01_quickstart.py
+```
+
+`_shared.load_dataset()` looks for the file next to the DYNAMO-M checkout and
+falls back to the synthetic table if it is not found. Expect multi-minute
+runtimes on the full table.
+
+## Phase 4a — the live DYNAMO-M rule (example 05)
+
+`DynamoLiveRule` drives the upstream `DecisionModule.calcEU_*` directly. The
+DYNAMO-M dependency is **optional and guarded**:
+
+* `DYNAMO_M_AVAILABLE` reports whether it is importable; the package works
+  without it (example 05 prints a notice and exits cleanly).
+* Point it at a checkout with `DynamoLiveRule(cfg.decision, dynamo_path=...)` or
+  the `DYNAMO_M_PATH` environment variable.
+
+The parity gate (identical decisions, EU differences at float32 level) is the
+executable Phase-1 cross-check. See the verification bundle in
+`.../progress_todos/20260708_phase4a_live_dynamo_parity/`.
+
+## Folder structure
+
+```
+examples_engine/                     ← YOU ARE HERE (canonical learning path)
+  ├── _shared.py                     (helper: sys.path + dataset)
+  ├── 01_quickstart.py
+  ├── 02_rules_comparison.py
+  ├── 03_custom_rule.py
+  ├── 04_monte_carlo_uncertainty.py
+  ├── 05_dynamo_live_parity.py       (Phase 4a)
+  ├── README.md                      (this file)
+  └── old_bridge_examples/           ⚠️ DEPRECATED (pre-refactor bridge demos)
+       ├── run_coupled_example.py
+       ├── run_trace_manual_check.py
+       └── README.md
+```
+
+## Legacy examples
+
+`old_bridge_examples/` holds the original `DynamoDecisionBridge`-based scripts
+from before the Phase 2+3 refactor. They still work but are **reference only** —
+`DynamoDecisionBridge` is now internal (`floodadapt_abm._core`). Prefer the
+numbered examples above for all new work.
+
+## Tests
+
+The library behaviour these examples exercise is covered by the suite:
+
+```bash
+pytest tests/ -q
+```

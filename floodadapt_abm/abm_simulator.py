@@ -15,8 +15,8 @@ abm_simulator.py
     * the Gate-1 regression test, which asserts that ``ThresholdRule`` reproduces
       this class's damage/adaptation formula bit-for-bit.
 
-    New code should use ``SimulationEngine``.  See
-    ``examples_engine/run_coupled_example_engine.py``.
+    New code should use ``SimulationEngine``.  See the numbered examples in
+    ``examples_engine/`` (start with ``01_quickstart.py``).
 """
 import numpy as np
 import warnings
