@@ -60,6 +60,15 @@ from floodadapt_abm.dynamo_live_rule import (
     DYNAMO_M_AVAILABLE,
 )
 
+# Phase 4b: Mesa-native driving (time-ownership inversion). Framework-free
+# mirror of DYNAMO-M's SLRModel.step() tick loop; reuses the shared kernels.
+from floodadapt_abm.mesa_native import (
+    FloodAdaptSLRModel,
+    Agents as MesaAgents,
+    CoastalNodePopulation,
+    run_mesa_native,
+)
+
 __all__ = [
     "SimulationEngine",
     "ABMSimulator",
@@ -69,6 +78,10 @@ __all__ = [
     "DynamoLiveRule",
     "DynamoMNotAvailable",
     "DYNAMO_M_AVAILABLE",
+    "FloodAdaptSLRModel",
+    "MesaAgents",
+    "CoastalNodePopulation",
+    "run_mesa_native",
     "AgentState",
     "CouplingConfig",
     "DecisionConfig",

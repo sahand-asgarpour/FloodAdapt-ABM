@@ -28,6 +28,7 @@ python 01_quickstart.py
 | 03 | `03_custom_rule.py` | Open/Closed: write your own `DecisionRule` (`should_adapt`) and plug it in. |
 | 04 | `04_monte_carlo_uncertainty.py` | Why `no_seq` exists: average across sequences for expected outcomes + uncertainty (std). |
 | 05 | `05_dynamo_live_parity.py` | **Phase 4a**: `DynamoLiveRule` drives *native* DYNAMO-M as a parity oracle proving the ported `SEURule` has not drifted. Guarded/optional dependency. |
+| 06 | `06_mesa_native_driving.py` | **Phase 4b**: invert time ownership — `FloodAdaptSLRModel.step()` ticks drive the shared kernels (mirrors DYNAMO-M `SLRModel.run_model()`); reproduces `engine.run` bit-for-bit. |
 
 `_shared.py` is a helper (not an example): it bootstraps `sys.path` and provides
 the dataset. You never need to run it directly.
@@ -47,7 +48,8 @@ SimulationEngine        owns TIME + DATA (NetCDF load, interpolation,
 ```
 
 * **Time** is driven by the length of the SLR trajectory you pass to
-  `engine.run(slr_values, ...)` — one value per year.
+  `engine.run(slr_values, ...)` — one value per year. In **example 06** time is
+  instead driven by `model.step()` ticks (Phase 4b), producing identical results.
 * **`no_seq`** independent Monte-Carlo sequences each get a fresh `AgentState`
   and their own random weather; aggregate across them for expected behaviour.
 * **`SEURule`** is *ex-ante* (forward-looking utility), **`ThresholdRule`** is
@@ -97,6 +99,27 @@ The parity gate (identical decisions, EU differences at float32 level) is the
 executable Phase-1 cross-check. See the verification bundle in
 `.../progress_todos/20260708_phase4a_live_dynamo_parity/`.
 
+## Phase 4b — Mesa-native driving (example 06)
+
+Phase 4b **inverts time ownership**: instead of `engine.run()` owning the year
+loop, a small `FloodAdaptSLRModel` advances one tick at a time via
+`model.step()`, mirroring the native DYNAMO-M `SLRModel.run_model()`
+(`while True: self.step()`). The object graph mirrors DYNAMO-M
+(`FloodAdaptSLRModel → Agents → CoastalNodePopulation → DecisionRule`) and
+`run_mesa_native(...)` reproduces `engine.run(...)` **bit-for-bit** — proving the
+migration is non-breaking because the `DecisionRule.should_adapt` seam is
+unchanged.
+
+```python
+from floodadapt_abm import SimulationEngine, CouplingConfig, run_mesa_native
+engine = SimulationEngine(ds=ds, config=CouplingConfig())
+res = run_mesa_native(engine, slr_values, no_seq=5, seed=42)   # time owned by model.step()
+```
+
+Binding the *real* honeybees `SLRModel` ("4b-full") needs the full DYNAMO-M data
+ecosystem and is a documented follow-up. See the verification bundle in
+`.../progress_todos/20260708_phase4b_mesa_native_driving/`.
+
 ## Folder structure
 
 ```
@@ -107,6 +130,7 @@ examples_engine/                     ← YOU ARE HERE (canonical learning path)
   ├── 03_custom_rule.py
   ├── 04_monte_carlo_uncertainty.py
   ├── 05_dynamo_live_parity.py       (Phase 4a)
+  ├── 06_mesa_native_driving.py      (Phase 4b)
   ├── README.md                      (this file)
   └── old_bridge_examples/           ⚠️ DEPRECATED (pre-refactor bridge demos)
        ├── run_coupled_example.py
