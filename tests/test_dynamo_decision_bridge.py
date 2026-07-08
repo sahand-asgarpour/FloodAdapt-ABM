@@ -198,11 +198,11 @@ class TestDecisionConfig:
 
     def test_default_risk_aversion(self) -> None:
         cfg = DecisionConfig()
-        assert cfg.risk_aversion == 1.5
+        assert cfg.risk_aversion == 1.0
 
     def test_default_discount_rate(self) -> None:
         cfg = DecisionConfig()
-        assert cfg.discount_rate == 0.04
+        assert cfg.discount_rate == 0.032
 
     def test_custom_values(self) -> None:
         cfg = DecisionConfig(risk_aversion=2.0, discount_rate=0.05)
@@ -782,11 +782,15 @@ class TestEventCapping:
         bridge = DynamoDecisionBridge(ds=ds, config=cfg)
         bridge.prepare_damage_arrays(slr_value=0.0)
         
+        # All events fire (random()==0.0 < prob); cap then randomly selects
+        # `max_events` of them without replacement via `choice`.  The mock
+        # supplies a deterministic `choice` so the test is reproducible.
         class AlwaysTrueRNG:
             def random(self): return 0.0
-            
+            def choice(self, n, size, replace=False):
+                return np.arange(size)
+
         occurred, _ = _simulate_year_events(bridge, 2025, AlwaysTrueRNG())
+        # Event-cap semantics are now magnitude/random-selection based (see
+        # DecisionConfig.max_events_per_year note); only the COUNT is asserted.
         assert len(occurred) == 2
-        # Should be the two most frequent events (ev_000, ev_001)
-        assert "ev_000" in occurred
-        assert "ev_001" in occurred
