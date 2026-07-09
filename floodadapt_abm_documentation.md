@@ -391,7 +391,8 @@ with the identical RNG stream, so the whole path stays **bit-for-bit** identical
   track_eu=False, start_year=2020)` — subclasses the real `honeybees.model.Model`; the
   clock (`current_time`/`current_timestep`/`end_time`) is owned by honeybees.
   `timestep` is a 0-based property alias of `current_timestep`. Reuses the PRE.3
-  staleness guard.
+  staleness guard (`self.engine.reset_state()` and `self._state_epoch = engine.state_epoch`).
+  **Why it's needed:** A single `SimulationEngine` can be reused to run thousands of models in a loop. Because allocating memory is slow, the engine reuses the exact same memory arrays for agent states (wealth, age, etc.) on every run. If a developer accidentally tried to step two different models at the exact same time using the same engine, their arrays would blindly overwrite each other, ruining the results silently. By calling `reset_state()`, the engine zeroes out its arrays and increments a counter (`state_epoch`). The model grabs that "ticket number". Later, when the model tries to step forward, it checks if its ticket number still matches the engine. If it doesn't, it means another model hijacked the engine, and it throws a loud error rather than corrupting your data.
 - `run_mesa_native_full(engine, slr_values, no_seq=1, seed=None,
   interp_method='linear', track_eu=False, start_year=2020)` — drop-in analogue of
   `run_mesa_native` / `engine.run`; same return schema.

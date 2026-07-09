@@ -393,11 +393,8 @@ This keeps the whole path bit-for-bit identical to the 4b scaffold and `engine.r
 | 6 | Execute the 4b-full gate: 4b-full ≡ 4b-scaffold ≡ `engine.run` bit-for-bit. | Low | **PASS** — element-wise equality across seeds/sequences; **+22 tests → 147 PASS** |
 
 Scope note: GLOFRIS/gravity CWD, `spin_up_flag`, low-memory `.npz` paging and the native
-reporter are intentionally **out of MVP scope** — the native `CoastalNode.step()` is too
-entangled with that data ecosystem to drive on a dependency-free population, so 4b-full
-reuses the validated engine kernel for the per-tick physics and the native `DecisionModule`
-for the decision math, inside a real honeybees `Model`. Those sub-systems remain available
-for a future full-geodata run (context in §12.3).
+reporter are intentionally **out of MVP scope**. 
+**Why don't we use the real DYNAMO-M geography setup?** Because we want to keep things lightweight. DYNAMO-M uses a complex geospatial data loading system (multi-gigabyte rasters for amenities, gravity models for population migration between municipalities, etc.). The objective of the `FloodAdapt-ABM` coupling is to build a fast Monte-Carlo simulator that strictly evaluates the SEU decision math against the FloodAdapt (SFINCS+FIAT) precomputed lookup table. By stripping out the heavy geospatial rasters, gravity models, and internal flood routing physics, the `FloodAdapt-ABM` simulator can execute tens of thousands of sequences per minute in parallel. Thus, the native `CoastalNode.step()` is too entangled with that heavy data ecosystem, so 4b-full reuses the validated engine kernel for the per-tick physics and the native `DecisionModule` for the decision math, inside a real honeybees `Model`. Those sub-systems remain available for a future full-geodata run (context in §12.3).
 
 ### 11.3 Phase 5 — extending decision rules (future)
 
