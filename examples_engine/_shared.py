@@ -31,10 +31,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Conventional location of the real Charleston lookup table (optional).
+# Candidate locations of the real Charleston lookup table (optional).
+# FA_ABM_REAL_TABLE_PATH takes precedence (same env var as the PRE.2
+# real-table gate); the sibling-checkout convention is the fallback.
 _REAL_TABLE_CANDIDATES = [
+    *( [Path(os.environ["FA_ABM_REAL_TABLE_PATH"])]
+       if os.environ.get("FA_ABM_REAL_TABLE_PATH") else [] ),
     _REPO_ROOT.parent / "DYNAMO-M" / "lookup_table_charleston_beta_release_ABM_probabilistic_set.nc",
-    Path(r"C:\repos\DYNAMO-M\lookup_table_charleston_beta_release_ABM_probabilistic_set.nc"),
 ]
 
 

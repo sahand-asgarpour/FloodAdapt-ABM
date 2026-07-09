@@ -97,7 +97,7 @@ DYNAMO-M dependency is **optional and guarded**:
 
 The parity gate (identical decisions, EU differences at float32 level) is the
 executable Phase-1 cross-check. See the verification bundle in
-`.../progress_todos/20260708_phase4a_live_dynamo_parity/`.
+[`verification/phase4a_parity/`](../verification/phase4a_parity/).
 
 ## Phase 4b — Mesa-native driving (example 06)
 
@@ -118,7 +118,7 @@ res = run_mesa_native(engine, slr_values, no_seq=5, seed=42)   # time owned by m
 
 Binding the *real* honeybees `SLRModel` ("4b-full") needs the full DYNAMO-M data
 ecosystem and is a documented follow-up. See the verification bundle in
-`.../progress_todos/20260708_phase4b_mesa_native_driving/`.
+[`verification/phase4b_mesa_native/`](../verification/phase4b_mesa_native/).
 
 ## Folder structure
 
