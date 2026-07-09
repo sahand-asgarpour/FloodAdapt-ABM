@@ -42,9 +42,12 @@ The Strategy-Pattern architecture proposed on 20260707/20260708 is now delivered
 ```
 SimulationEngine (owns time + data)          FloodAdaptSLRModel (Phase 4b: owns time via ticks)
   ├── NetCDF loading / interpolation           ├── engine: SimulationEngine (shared kernel)
+  │     ├── strategy cube materialized once
+  │     └── per-(SLR, method) interp cache
   ├── Stochastic event draw (Bernoulli + cap)  └── agents → CoastalNodePopulation → step()
   ├── AgentState (wealth, income, risk_perception,
   │              flood_timer, is_adapted, time_adapted)
+  ├── run(no_seq, n_jobs) — parallel Monte-Carlo sequences (bit-identical)
   └── decision_rule: DecisionRule  ← pluggable
         ├── ThresholdRule   (legacy 0.3 rule)
         ├── SEURule         (ported DYNAMO-M SEU — MVP default)
@@ -63,7 +66,7 @@ An external review of the repo, examples, docs and the `verification_tests/` bun
 | Sev. | Issue | Location | Action (task ID) |
 |---|---|---|---|
 | Med | `FloodAdaptSLRModel.__init__` calls `engine.reset_state()` on a **shared** engine; constructing a second model silently invalidates the first model's live `agents.regions.state` view. Safe inside `run_mesa_native`'s sequential loop, but a footgun for manual tick-driving (as example 06 teaches). 4b-full would copy this pattern. | `mesa_native.py:174` | PRE.3 |
-| Med | Every gate so far ran on the synthetic table (≤250 objects); real Charleston table (61,858 × 207) never exercised through the engine/4b path. Performance/memory unknown at scale. | examples 05/06, `simulation_engine.py` | PRE.2 |
+| Med | Every gate so far ran on the synthetic table (≤250 objects); real Charleston table (61,858 × 207) never exercised through the engine/4b path. Performance/memory unknown at scale. | examples 05/06, `simulation_engine.py` | PRE.2 — **CLOSED**: executed, `gate_pass: True`; fixed a full-scale interpolation bottleneck (cube materialize-once + per-SLR cache + parallel `n_jobs`, commit `6f45d6f`) |
 | Med | Phase-1 V1–V6 battery was executed against the **old** `DynamoDecisionBridge` API, not the current `SimulationEngine + SEURule`; the roadmap's own Gate 2 ("re-run the full battery on the new engine") has no artifact. | `verification_tests/run_seu_validation.py` | VER.1 |
 | Med | V5 lifespan report still says "GAP (documented)" although the lifespan reset has since been implemented and unit-tested — the bundle's headline summary contradicts the shipped code. | `verification_tests/05_lifespan.md`, `00_SUMMARY.md` | VER.1 |
 | Med | Root `README.md` stale: references deleted `example/` folder, nonexistent `run_coupled_example_engine.py`, wrong folder layout; omits `mesa_native.py`, `dynamo_live_rule.py`, `decision_rule.py`. | `README.md` | HYG.1 |
@@ -140,7 +143,7 @@ Completed items from the 20260708 backlog are retained (struck) for traceability
 | **P0** | PRE.1 — pin honeybees/mesa in isolated env; import/instantiate test | 2026-07-09 review | 4b-pre | **DONE** — executed: mesa 3.3.1 / honeybees 1.2.0 pinned; DYNAMO-M `DecisionModule` + `SLRModel` import/instantiate (gate_pass True) |
 | **P0** | PRE.3 — fix `engine.reset_state()` shared-engine wart in `FloodAdaptSLRModel` | 2026-07-09 review (`mesa_native.py:174`) | 4b-pre | **DONE** (`state_epoch` guard + 4 tests, commit `7ceb144`; tests PASS) |
 | **P0** | HYG.1 — rewrite stale root `README.md` | 2026-07-09 review | 4b-pre | **DONE** (commit `d05a97a`) |
-| **P1** | PRE.2 — run gates on real Charleston table; profile `engine.step()` | 2026-07-09 review | 4b-pre | **RUNNING** — launched on the real 61,858 × 207 table (long-running, tracemalloc-profiled); report/metrics land in `verification/real_table_gate/` |
+| **P1** | PRE.2 — run gates on real Charleston table; profile `engine.step()` | 2026-07-09 review | 4b-pre | **DONE / PASS** — executed on the real 61,858 × 207 table (57,976 agents); `gate_pass: True` (4b bit-parity + 4a subset parity). Surfaced + fixed a full-scale interpolation bottleneck (cube materialize-once + per-SLR cache; ×1.4 parallel `n_jobs`); report/metrics in `verification/real_table_gate/` — see `20260709_performed_tasks.md` §6.1 |
 | **P1** | VER.1 — re-run V1–V6 battery on `SimulationEngine`+`SEURule`; regenerate V5 (lifespan now closed) | 2026-07-09 review | 4b-pre | **DONE (battery re-run + figures regenerated)** — V1–V4/V6 PASS; V5 stays "GAP" on the legacy-bridge harness (engine path's lifespan reset is unit-tested green); porting the harness onto the engine API is the residual |
 | **P1** | HYG.3 — CI pipeline (pytest + examples + 4b gate) | 2026-07-09 review | 4b-pre | **DONE** (`.github/workflows/ci.yml`, commit `8b7384c`; activates on push) |
 | **P1** | HYG.2 — de-machine-ify `AGENTS.md`; vendor verification bundles into repo | 2026-07-09 review | 4b-pre | **DONE** (commits `3af86e8`, `87ea7c6`) |
@@ -161,7 +164,7 @@ Completed items from the 20260708 backlog are retained (struck) for traceability
 | 3 | `SimulationEngine` + rules | ThresholdRule reproduces legacy output; lifespan reset shipped | ✅ PASS |
 | 4a | Live DYNAMO-M SEU parity | `calcEU_*` parity within tol.; import optional/guarded | ✅ PASS (worst EU abs 1.9e-6, rel 4.8e-7) |
 | 4b | Mesa-native driving (scaffold) | `run_mesa_native == engine.run` bit-for-bit | ✅ PASS (5/5 cases) |
-| **4b-pre** | **De-risking + hygiene (this doc)** | **PRE.1–4 + HYG.1–4 + VER.1–2 complete; CI green; README/AGENTS accurate; battery re-run on engine; real-table gate executed** | ✅ DONE (2026-07-09: merged into `sahand-asgarpour/FloodAdapt-ABM`, one commit per task; 120 tests PASS; PRE.1 executed; PRE.2 launched/running; VER.1 battery + figures regenerated; pushed to `origin/main` — see `20260709_performed_tasks.md` §6. Residual: PRE.2 metrics on completion; port the standalone V5 harness onto the engine API) |
+| **4b-pre** | **De-risking + hygiene (this doc)** | **PRE.1–4 + HYG.1–4 + VER.1–2 complete; CI green; README/AGENTS accurate; battery re-run on engine; real-table gate executed** | ✅ DONE (2026-07-09: merged into `sahand-asgarpour/FloodAdapt-ABM`, one commit per task; 125 tests PASS; PRE.1 executed; **PRE.2 executed → gate_pass: True** on the real 61,858 × 207 table, after fixing a full-scale interpolation bottleneck (per-SLR cube cache + parallel `n_jobs`, commit `6f45d6f`); VER.1 battery + figures regenerated; pushed to `origin/main` — see `20260709_performed_tasks.md` §6 + §6.1. Residual: port the standalone V5 harness onto the engine API) |
 | 4b-full | Full Mesa-native integration | `SLRModel.step()` drives native `CoastalNode` population from the lookup table; 4b-full ≡ 4b-scaffold bit-for-bit | 🔲 BLOCKED on 4b-pre |
 | 5 | Extending decision rules | `calcEU_insure`, migration, government CBA as new rules | 🔲 FUTURE |
 

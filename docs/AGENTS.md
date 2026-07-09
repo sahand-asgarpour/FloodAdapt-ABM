@@ -721,6 +721,20 @@ called by `DynamoLiveRule`.
 
 ## Phase 4b — Mesa-native driving (time-ownership inversion)
 
+**Engine performance contract (2026-07-09).** Two engine capabilities were added
+while closing PRE.2 and are safe to rely on:
+- **Per-SLR interpolation cache.** `DynamoDecisionBridge` materializes each
+  strategy's damage cube once and memoises `prepare_damage_arrays` per `(SLR,
+  method)`. Repeated ticks/sequences at the same SLR reuse the interpolated
+  matrices (cached arrays are read-only). Deterministic → bit-identical results;
+  call `clear_interp_cache()` to free memory.
+- **Parallel Monte-Carlo sequences.** `SimulationEngine.run(..., n_jobs=N)` runs
+  the independent sequences across a thread pool of per-worker engine clones that
+  share a pre-warmed, read-only SLR cache. `n_jobs=1` (default) is the unchanged
+  sequential path; `n_jobs>1` / `-1` is **bit-identical** for deterministic
+  rules (`SEURule` with `error_interval == 0`, `ThresholdRule`). Use
+  `DecisionRule.clone()` if you need an isolated rule instance.
+
 **Status: delivered (scaffold), gated.** Phase 4b inverts *who owns time*. In
 Phases 3/4a the year loop lives in `SimulationEngine.run()`; in Phase 4b a small
 `FloodAdaptSLRModel` advances one tick at a time via `model.step()`, mirroring the
@@ -844,8 +858,13 @@ criteria: `docs/20260709_proposed_development_architecture_steps.md` §7.1):
   pinning honeybees/mesa against the DYNAMO-M checkout (prepared; execute on
   the dev machine and pin the recorded versions).
 - **PRE.2** `verification/real_table_gate/` — the 4b bit-parity gate + per-tick
-  `engine.step()` profile on the REAL Charleston table (prepared; needs
-  `FA_ABM_REAL_TABLE_PATH`).
+  `engine.step()` profile on the REAL Charleston table (61,858 × 207; needs
+  `FA_ABM_REAL_TABLE_PATH`). **Executed → `gate_pass: True`.** Uncovered and
+  fixed a full-scale interpolation bottleneck: the residential strategy cube is
+  now materialized once and `prepare_damage_arrays` is memoised per `(SLR,
+  method)`, and `SimulationEngine.run(n_jobs=...)` runs the independent
+  Monte-Carlo sequences in parallel (bit-identical to `n_jobs=1`). See
+  `20260709_performed_tasks.md` §6.1.
 - **PRE.3** shared-engine staleness guard — `SimulationEngine.state_epoch` +
   `FloodAdaptSLRModel._check_not_stale()`: stepping a model whose engine state
   was reset by a newer model (or `engine.run()`) raises instead of silently

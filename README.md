@@ -2,7 +2,7 @@
 
 FloodAdapt-ABM is a lightweight agent-based simulator that processes a precomputed [FloodAdapt](https://pypi.org/project/flood-adapt/) impact lookup table to generate Monte-Carlo time series of building-level damages and household floodproofing decisions under sea-level rise. Household behaviour is pluggable: a simple damage-threshold rule, the ported **DYNAMO-M** Subjective Expected Utility (SEU) framework (the validated default), or the *live* native DYNAMO-M decision module.
 
-**Status:** Phases 0–4b (scaffold) complete and gated — 120/120 tests, bit-parity gates PASS; the 4b-pre de-risking phase (PRE.1–4, HYG.1–4, VER.1–2) is complete and pushed. See [docs/20260709_proposed_development_architecture_steps.md](docs/20260709_proposed_development_architecture_steps.md) for the roadmap and [verification/](verification/) for the executable gate evidence.
+**Status:** Phases 0–4b (scaffold) complete and gated — 125/125 tests, bit-parity gates PASS; the 4b-pre de-risking phase (PRE.1–4, HYG.1–4, VER.1–2) is complete and pushed, and PRE.2 has been executed on the real 61,858 × 207 Charleston table (`gate_pass: True`). See [docs/20260709_proposed_development_architecture_steps.md](docs/20260709_proposed_development_architecture_steps.md) for the roadmap and [verification/](verification/) for the executable gate evidence.
 
 ---
 

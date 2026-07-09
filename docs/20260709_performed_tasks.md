@@ -42,7 +42,7 @@ Total: 49 files changed, ~5,400 insertions over the baseline.
 | PRE.3 staleness guard | Implemented + 4 tests — **PASS** (executed, see §6) |
 | PRE.4 adapter contract | Implemented + 10 tests — **PASS** (executed, see §6) |
 | PRE.1 import/pin test | **PASS** — mesa 3.3.1 / honeybees 1.2.0 pinned; DYNAMO-M `DecisionModule` + `SLRModel` import & instantiate (see §6) |
-| PRE.2 real-table gate | **RUNNING** on the real 61,858 × 207 Charleston table (long-running, tracemalloc-profiled; report/metrics land in `verification/real_table_gate/` on completion — see §6) |
+| PRE.2 real-table gate | **PASS** — executed on the real 61,858 × 207 Charleston table (57,976 residential agents). `gate_pass: True` (phase-4b bit-parity + phase-4a subset parity both True). Run A `engine.run` (SEURule, parallel) 73.7 s / 3.3 GiB; run B `run_mesa_native` 119.4 s / 4.8 GiB; per-tick mean 2.62 s. See §6 + §6.1. |
 | CI | Workflow committed + guarded for local-only `verification/`; activates on push (pushed) |
 | VER.1 battery re-run on engine | **EXECUTED** — V1–V6 reproduced, all figures regenerated (see §6) |
 
@@ -50,7 +50,7 @@ Total: 49 files changed, ~5,400 insertions over the baseline.
 
 1. ~~`pip install -e .[dev] && pytest tests/ -q`~~ — **DONE** (120 passed; see §6).
 2. ~~Execute PRE.1 and pin honeybees/mesa versions~~ — **DONE** (mesa 3.3.1 / honeybees 1.2.0 pinned in `pyproject.toml`).
-3. ~~Execute PRE.2 real-table gate~~ — **launched** (long-running full-scale run; report/metrics land in `verification/real_table_gate/` on completion).
+3. ~~Execute PRE.2 real-table gate~~ — **DONE / PASS** (`gate_pass: True` on the real 61,858 × 207 table; report + metrics in `verification/real_table_gate/`; see §6.1). Required fixing a full-scale interpolation bottleneck first (see §6.1).
 4. ~~Push to GitHub → CI~~ — **DONE** (pushed to `origin/main`; CI activated).
 5. ~~Run VER.1 (re-run V1–V6 on `SimulationEngine` + `SEURule`)~~ — **battery re-run + figures regenerated**; V5 nuance below.
 6. **NEXT:** Enter 4b-full step 2 (populate the real `SLRModel`) per `20260709_proposed_development_architecture_steps.md` §7.2 — every 4b-pre headline risk is now retired.
@@ -69,7 +69,7 @@ with the DYNAMO-M checkout and the real Charleston `.nc` present.
 | **Phase-4b gate** | `verification/phase4b_mesa_native/run_phase4b_verification.py` | **gate_pass: True** (`run_mesa_native == engine.run`, bit-identical). |
 | **Phase-4a parity** | `verification/phase4a_parity/run_phase4a_parity.py` | **gate_pass: True** — worst abs 1.9e-6, worst rel 4.8e-7 vs live DYNAMO-M `DecisionModule`. |
 | **VER.1 battery** | `verification/phase1_seu_battery/run_seu_validation.py` | V1 PASS · V2 PASS · V3 PASS · V4 PASS · V5 GAP (documented, see note) · V6 PASS (worst rel 4.17e-7). All six `figures/*.png` regenerated. |
-| **PRE.2** | `verification/real_table_gate/run_real_table_gate.py` (`FA_ABM_REAL_TABLE_PATH`) | **Launched** on the real 61,858 × 207 table (full-scale, tracemalloc-profiled — long-running); report/metrics written to `verification/real_table_gate/` on completion. |
+| **PRE.2** | `verification/real_table_gate/run_real_table_gate.py` (`FA_ABM_REAL_TABLE_PATH`) | **gate_pass: True** on the real 61,858 × 207 table (57,976 residential agents; 3 seq × 30 y). `phase4b_bit_parity_real_table: True`, `phase4a_parity_real_table_subset: True`. Run A (parallel `engine.run`) 73.7 s / 3.3 GiB; run B (`run_mesa_native`) 119.4 s / 4.8 GiB; per-tick mean 2.62 s, max 8.96 s. |
 
 **Merge/dependency notes.**
 - The `verification/` bundle is kept **git-ignored** (present locally so the gates run,
@@ -89,3 +89,54 @@ the 120-test run). Fully flipping the standalone battery's V5 headline to PASS r
 porting the harness itself onto the engine API — tracked as the residual of VER.1.
 
 — End of work log —
+
+## 6.1 Performance work (2026-07-09, follow-up)
+
+Running PRE.2 at full scale surfaced a hot-path bottleneck that made the gate
+impractically slow (>11 min, previously mislabelled a "tracemalloc" stall). Two
+independent causes were found and fixed; the fixes are committed engine
+improvements (not just harness tweaks) and benefit the coming 4b-full runs.
+
+**Root causes.**
+1. `DynamoDecisionBridge.prepare_damage_arrays()` re-interpolated the entire
+   61,858 × 207 damage catalogue on **every tick of every Monte-Carlo
+   sequence**, even though the SLR trajectory is identical across sequences
+   (`no_seq×` redundant work). ~5.5 s per call at scale.
+2. Inside the kernel, the residential subset was taken with a **boolean `isel`
+   on the lazily backed xarray cube** — pathologically slow at scale (~24 s for
+   the first materialization).
+
+**Fixes (commit `6f45d6f`).**
+- `lookup_utils`: split `materialize_strategy_cube()` (materialize the full
+  cube in NumPy, then mask in-memory) from `interpolate_cube_at_slr()`
+  (unchanged `interp1d` math → bit-identical results).
+- Bridge: materialize each strategy cube **once**, and memoise
+  `prepare_damage_arrays` per `(SLR, method)`; cached matrices are read-only.
+- `SimulationEngine.run(n_jobs=...)`: run the independent sequences across a
+  thread pool of per-worker engine clones sharing a pre-warmed, read-only SLR
+  cache. `n_jobs=1` (default) leaves the sequential path untouched; parallel
+  output is **bit-identical** for deterministic rules.
+- `DecisionRule.clone()` for isolated per-worker rule instances.
+
+**Measured effect (real Charleston table).**
+
+| Metric | Before | After |
+|---|---:|---:|
+| First cube materialization (masked) | ~24 s | ~3.6 s |
+| Interpolation per distinct SLR | ~5.5 s | ~1.0 s |
+| Interpolation on repeated SLR | ~5.5 s | ~0 s (cache hit) |
+| `engine.run` 4 seq × 30 y (sequential) | 116.7 s | — |
+| `engine.run` 4 seq × 30 y (`n_jobs=-1`) | — | 83.3 s (×1.4, bit-identical) |
+
+**Gate outcome.** `verification/real_table_gate/real_table_report.md`:
+`Gate: PASS` — `phase4b_bit_parity_real_table: True`,
+`phase4a_parity_real_table_subset: True`.
+
+**Harness note (local-only).** `run_real_table_gate.py` now makes tracemalloc
+opt-in (`FA_ABM_GATE_PROFILE_MEM=1`, default off; cheap `psutil` RSS peak
+otherwise) and exposes `FA_ABM_GATE_JOBS` for run A. `verification/` remains
+git-ignored, so these harness edits stay local.
+
+**Tests.** Added cache bit-parity, cache-reuse, and `n_jobs` bit-parity
+(SEURule + ThresholdRule) tests; full suite now **125 passed** locally.
+
