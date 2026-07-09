@@ -24,7 +24,14 @@ pipeline = ["flood-adapt==1.1.3"]
 # which runs via the dependency-free mesa_native mirror. Pin exact versions once
 # PRE.1 (verification/preflight_4b_full/step1_import_test.py) records them.
 dynamo = ["mesa==3.3.1", "honeybees==1.2.0"]
-dev = ["pytest", "pytest-cov", "ipykernel", "jupyterlab"]
+dev = ["pytest>=7", "pytest-cov", "ipykernel", "jupyterlab"]
 
 [tool.setuptools]
 packages = ["floodadapt_abm"]
+
+[tool.pytest.ini_options]
+# Put the repo root on sys.path so `from tests.conftest import ...` resolves
+# regardless of the editable-install mode (PEP 660 strict editables only expose
+# the declared `floodadapt_abm` package, not the top-level `tests` namespace).
+pythonpath = ["."]
+testpaths = ["tests"]
