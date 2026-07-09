@@ -52,6 +52,13 @@ SimulationEngine        owns TIME + DATA (NetCDF load, interpolation,
   instead driven by `model.step()` ticks (Phase 4b), producing identical results.
 * **`no_seq`** independent Monte-Carlo sequences each get a fresh `AgentState`
   and their own random weather; aggregate across them for expected behaviour.
+* **`n_jobs`** parallelizes those sequences: `engine.run(..., n_jobs=N)` spreads
+  them across a thread pool of per-worker clones that share a pre-warmed,
+  read-only interpolation cache. `n_jobs=1` (default) is the unchanged
+  sequential path; `n_jobs>1` / `-1` (all cores) is **bit-identical** for
+  deterministic rules. The engine also memoises the SLR→damage interpolation
+  per `(SLR, method)`, so repeated ticks/sequences reuse the cube instead of
+  re-interpolating — this is what makes the real table (below) tractable.
 * **`SEURule`** is *ex-ante* (forward-looking utility), **`ThresholdRule`** is
   *ex-post* (reacts to realised damage) — hence example 04 uses the latter to
   show adoption variance.
@@ -83,7 +90,12 @@ python 01_quickstart.py
 
 `_shared.load_dataset()` looks for the file next to the DYNAMO-M checkout and
 falls back to the synthetic table if it is not found. Expect multi-minute
-runtimes on the full table.
+runtimes on the full table — pass `n_jobs=-1` to `engine.run(...)` to parallelize
+the Monte-Carlo sequences (bit-identical), and reuse a single `engine` across
+runs so its per-SLR interpolation cache stays warm (the cache is released when the
+engine is discarded, or via `engine._data.clear_interp_cache()`). On the real
+table these cut per-tick interpolation from ~5.5 s to ~1 s (first cube
+materialize ~24 s → ~3.6 s) and give ~1.4× from parallel sequences.
 
 ## Phase 4a — the live DYNAMO-M rule (example 05)
 

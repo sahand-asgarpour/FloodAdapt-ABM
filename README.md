@@ -76,6 +76,17 @@ FloodAdapt-ABM/
 
 The `.nc` lookup table is the **only** interface between the stages — keep it stable.
 
+## Performance & parallelization
+
+Two bit-identical engine speedups (landed while closing the real-table gate, commit `6f45d6f`):
+
+- **Per-SLR interpolation cache** — the residential strategy cube is materialized once and `prepare_damage_arrays` is memoised per `(SLR, method)`. Because the SLR trajectory repeats across Monte-Carlo sequences this removes the `no_seq×` redundant interpolation (per-tick ~5.5 s → ~1 s on the real Charleston table; first cube materialize ~24 s → ~3.6 s). `bridge.clear_interp_cache()` frees the memory.
+- **Parallel Monte-Carlo sequences** — `engine.run(..., n_jobs=N)` runs the independent sequences across a thread pool of per-worker clones sharing a pre-warmed, read-only cache. `n_jobs=1` (default) is the unchanged sequential path; `n_jobs>1` / `-1` is **bit-identical** for deterministic rules (~1.4× on the real table). Use `DecisionRule.clone()` for isolated per-worker rule instances.
+
+```python
+results = engine.run(np.linspace(0, 1.5, 30), no_seq=100, seed=42, n_jobs=-1)  # all cores, bit-identical
+```
+
 ## Decision rules (Strategy Pattern)
 
 | Rule | Behaviour | Use |
@@ -116,5 +127,6 @@ Phase-gate evidence (reports, metrics, re-runnable harnesses) lives in [verifica
 ## Documentation
 
 - [examples_engine/README.md](examples_engine/README.md) — architecture & usage walkthrough
+- [docs/coupling_architecture.md](docs/coupling_architecture.md) — full FloodAdapt-ABM ↔ DYNAMO-M coupling architecture (MVP scope, SEU math, bridge signature, UML/sequence/data-flow diagrams, walkthrough, roadmap & gates)
 - [docs/AGENTS.md](docs/AGENTS.md) — deep operational guide (data requirements, schema, gotchas, phase history)
 - [docs/20260709_proposed_development_architecture_steps.md](docs/20260709_proposed_development_architecture_steps.md) — current roadmap (4b-pre → 4b-full → Phase 5)
