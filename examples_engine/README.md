@@ -29,6 +29,7 @@ python 01_quickstart.py
 | 04 | `04_monte_carlo_uncertainty.py` | Why `no_seq` exists: average across sequences for expected outcomes + uncertainty (std). |
 | 05 | `05_dynamo_live_parity.py` | **Phase 4a**: `DynamoLiveRule` drives *native* DYNAMO-M as a parity oracle proving the ported `SEURule` has not drifted. Guarded/optional dependency. |
 | 06 | `06_mesa_native_driving.py` | **Phase 4b**: invert time ownership — `FloodAdaptSLRModel.step()` ticks drive the shared kernels (mirrors DYNAMO-M `SLRModel.run_model()`); reproduces `engine.run` bit-for-bit. |
+| 07 | `07_mesa_native_full.py` | **Phase 4b-full**: native-class integration — `FloodAdaptSLRModelFull` subclasses the **real honeybees `Model`** (owns time) and routes decisions through the native DYNAMO-M `DecisionModule`; triple-parity `full == scaffold == engine.run`. |
 
 `_shared.py` is a helper (not an example): it bootstraps `sys.path` and provides
 the dataset. You never need to run it directly.
@@ -128,9 +129,34 @@ engine = SimulationEngine(ds=ds, config=CouplingConfig())
 res = run_mesa_native(engine, slr_values, no_seq=5, seed=42)   # time owned by model.step()
 ```
 
-Binding the *real* honeybees `SLRModel` ("4b-full") needs the full DYNAMO-M data
-ecosystem and is a documented follow-up. See the verification bundle in
+Binding the *real* honeybees `SLRModel` in full ("4b-full") needs the full
+DYNAMO-M data ecosystem; the **native-class integration** below delivers the
+documented 4b-full gate without it. See the verification bundle in
 [`verification/phase4b_mesa_native/`](../verification/phase4b_mesa_native/).
+
+## Phase 4b-full — native-class integration (example 07)
+
+Phase 4b-full replaces the framework-free mirror with a **genuine honeybees
+`Model` subclass**: `FloodAdaptSLRModelFull` inherits the real framework clock
+(`current_time` / `current_timestep` / `end_time`) exactly as the upstream
+`SLRModel` does, and each year's decision runs through the **native DYNAMO-M
+`DecisionModule`** (via `DynamoLiveRule`). The coastal-node population is fed
+**entirely from the FloodAdapt lookup table** through the PRE.4
+`LookupTableAdapter` — no GLOFRIS, gravity or geodata. Because every numeric
+per-year operation is still delegated to the same `SimulationEngine.step` kernel
+with the same RNG stream, `run_mesa_native_full(...)` reproduces both
+`run_mesa_native(...)` and `engine.run(...)` **bit-for-bit** — the triple-parity
+4b-full gate.
+
+```python
+from floodadapt_abm import SimulationEngine, CouplingConfig, run_mesa_native_full
+engine = SimulationEngine(ds=ds, config=CouplingConfig())
+res = run_mesa_native_full(engine, slr_values, no_seq=5, seed=42)  # honeybees Model owns time
+```
+
+The full verification battery (multi-seed parity, native-vs-ported EU parity,
+adapter round-trip, real-table run) lives in
+[`verification/mesa_native_full/`](../verification/mesa_native_full/).
 
 ## Folder structure
 
@@ -143,6 +169,7 @@ examples_engine/                     ← YOU ARE HERE (canonical learning path)
   ├── 04_monte_carlo_uncertainty.py
   ├── 05_dynamo_live_parity.py       (Phase 4a)
   ├── 06_mesa_native_driving.py      (Phase 4b)
+  ├── 07_mesa_native_full.py         (Phase 4b-full)
   ├── README.md                      (this file)
   └── old_bridge_examples/           ⚠️ DEPRECATED (pre-refactor bridge demos)
        ├── run_coupled_example.py

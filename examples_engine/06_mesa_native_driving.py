@@ -83,10 +83,10 @@ def main() -> None:
         "\nThe loop owner changed (engine.run -> model.step ticks) but the\n"
         "results did not. The DecisionRule.should_adapt seam is unchanged, so\n"
         "migrating time toward the native honeybees model.step() is non-breaking.\n"
-        "Binding the real honeybees SLRModel ('4b-full') needs the DYNAMO-M data\n"
-        "ecosystem and is a documented follow-up."
+        "Example 07 (Phase 4b-full) binds the real honeybees Model and the native\n"
+        "DYNAMO-M DecisionModule on top of this same seam."
     )
-    print("\nDone. This is the last numbered example.")
+    print("\nDone. Continue with 07_mesa_native_full.py (Phase 4b-full).")
 
 
 if __name__ == "__main__":

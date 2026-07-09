@@ -69,6 +69,20 @@ from floodadapt_abm.mesa_native import (
     run_mesa_native,
 )
 
+# Phase 4b-full: native-class integration. Subclasses the real honeybees Model
+# (owns time) and routes decisions through the native DYNAMO-M DecisionModule
+# via DynamoLiveRule, feeding a deterministic node population from the FloodAdapt
+# lookup table through the PRE.4 adapter. Guarded so the package imports even
+# when honeybees is absent (HONEYBEES_AVAILABLE is False; construction raises).
+from floodadapt_abm.mesa_native_full import (
+    FloodAdaptSLRModelFull,
+    AgentsFull,
+    CoastalNodePopulationFull,
+    run_mesa_native_full,
+    HoneybeesNotAvailable,
+    HONEYBEES_AVAILABLE,
+)
+
 __all__ = [
     "SimulationEngine",
     "ABMSimulator",
@@ -82,6 +96,12 @@ __all__ = [
     "MesaAgents",
     "CoastalNodePopulation",
     "run_mesa_native",
+    "FloodAdaptSLRModelFull",
+    "AgentsFull",
+    "CoastalNodePopulationFull",
+    "run_mesa_native_full",
+    "HoneybeesNotAvailable",
+    "HONEYBEES_AVAILABLE",
     "AgentState",
     "CouplingConfig",
     "DecisionConfig",
