@@ -1,115 +1,119 @@
 # FloodAdapt-ABM
 
-FloodAdapt-ABM is a lightweight agent-based simulator that processes a precomputed [FloodAdapt](https://pypi.org/project/flood-adapt/) impact lookup table to generate a Monte-Carlo time series of building-level damages and household floodproofing decisions. It is designed to run either with a simple damage-threshold rule or coupled with the **DYNAMO-M** Subjective Expected Utility (SEU) decision framework.
+FloodAdapt-ABM is a lightweight agent-based simulator that processes a precomputed [FloodAdapt](https://pypi.org/project/flood-adapt/) impact lookup table to generate Monte-Carlo time series of building-level damages and household floodproofing decisions under sea-level rise. Household behaviour is pluggable: a simple damage-threshold rule, the ported **DYNAMO-M** Subjective Expected Utility (SEU) framework (the validated default), or the *live* native DYNAMO-M decision module.
+
+**Status:** Phases 0–4b (scaffold) complete and gated — 104/104 tests, bit-parity gates PASS. See [docs/20260709_proposed_development_architecture_steps.md](docs/20260709_proposed_development_architecture_steps.md) for the roadmap and [verification/](verification/) for the executable gate evidence.
 
 ---
 
-## Repository Structure
+## Quick start
 
-All source code is stored under the `floodadapt_abm/` directory:
+```python
+from floodadapt_abm import SimulationEngine, CouplingConfig
+import xarray as xr, numpy as np
+
+ds = xr.open_dataset("lookup_table.nc")                     # stage-1 output
+engine = SimulationEngine(ds=ds, config=CouplingConfig())   # SEURule by default
+results = engine.run(np.linspace(0, 1.5, 30), no_seq=10, seed=42)
+
+results["damage_history"]      # (no_seq, n_agents, n_years)
+results["adapted_history"]     # (no_seq, n_agents, n_years) bool
+results["adoption_fraction"]   # (no_seq, n_years)
+```
+
+No lookup table yet? The numbered examples run out-of-the-box on a synthetic one:
+
+```bash
+cd examples_engine
+python 01_quickstart.py
+```
+
+---
+
+## Repository structure
 
 ```
 FloodAdapt-ABM/
-├── floodadapt_abm/
-│   ├── __init__.py                    # Public API exports (SimulationEngine recommended)
-│   ├── _core/                         # Internal data-plumbing layer (not public)
-│   │   ├── dynamo_decision_bridge.py # DYNAMO-M SEU coupling (internal composition)
-│   │   └── lookup_utils.py           # NetCDF & SLR interpolation utilities (internal)
-│   ├── simulation_engine.py           # ⭐ RECOMMENDED: Unified engine (Phase 2+3)
-│   ├── decision_rule.py               # Pluggable rules: DecisionRule ABC, ThresholdRule, SEURule
-│   ├── agent_state.py                 # Per-agent state container
-│   ├── event_utils.py                 # Unified event drawing (Bernoulli + random-pool cap)
-│   ├── coupling_config.py             # Configuration dataclasses
-│   ├── abm_simulator.py               # Legacy simulator (threshold-based, backward compat)
-│   └── setup_lookup_table.py          # FloodAdapt stage 1 combinations matrix generator
-├── examples_engine/                   # ⭐ RECOMMENDED: SimulationEngine examples
-│   ├── run_coupled_example_engine.py # SEURule vs ThresholdRule demo
-│   ├── run_coupled_example.py         # (legacy bridge-based, reference only)
-│   ├── run_trace_manual_check.py      # (legacy bridge-based, reference only)
-│   └── README.md                      # Usage guide & architecture
-├── old_bridge_examples/               # DEPRECATED: Original bridge-based examples
-│   ├── run_coupled_example.py         # (moved from example/, kept for reference)
-│   ├── run_trace_manual_check.py      # (moved from example/, kept for reference)
-│   └── README.md                      # Migration guide
-├── tests/                             # Test suite
-│   ├── conftest.py                   # Shared test fixtures (mock datasets)
-│   ├── test_event_utils.py           # Event drawing tests
-│   ├── test_agent_state.py           # AgentState tests
-│   ├── test_decision_rule.py         # DecisionRule parity tests (gates)
-│   ├── test_simulation_engine.py     # SimulationEngine tests
-│   └── test_dynamo_decision_bridge.py # Bridge regression tests (43 tests)
-├── pyproject.toml                     # Standard package configuration & metadata
-├── environment.yml                    # Conda environment definition (optional)
-└── README.md                          # This file
+├── floodadapt_abm/                     # the package
+│   ├── __init__.py                     # public API (SimulationEngine recommended)
+│   ├── simulation_engine.py            # ⭐ unified engine: time, data, events, state
+│   ├── decision_rule.py                # DecisionRule ABC + ThresholdRule + SEURule
+│   ├── dynamo_live_rule.py             # Phase 4a: native-DYNAMO-M rule (guarded import)
+│   ├── mesa_native.py                  # Phase 4b: Mesa-native tick driver (mirror)
+│   ├── coastal_node_adapter.py         # PRE.4: lookup-table → CoastalNode adapter prototype
+│   ├── agent_state.py                  # vectorised per-agent state container
+│   ├── event_utils.py                  # unified event drawing (Bernoulli + random-pool cap)
+│   ├── coupling_config.py              # configuration dataclasses
+│   ├── abm_simulator.py                # DEPRECATED legacy simulator (backward compat)
+│   ├── setup_lookup_table.py           # stage-1 FloodAdapt orchestration
+│   └── _core/                          # internal plumbing (not public API)
+│       ├── dynamo_decision_bridge.py   #   ported SEU kernels + data layer
+│       └── lookup_utils.py             #   NetCDF & SLR interpolation utilities
+├── examples_engine/                    # ⭐ numbered learning path (01–06)
+│   ├── 01_quickstart.py … 06_mesa_native_driving.py
+│   ├── _shared.py                      # helper: dataset bootstrap (synthetic by default)
+│   ├── README.md                       # usage guide & architecture
+│   └── old_bridge_examples/            # DEPRECATED pre-refactor demos (reference only)
+├── tests/                              # pytest suite (incl. all parity gates)
+├── verification/                       # vendored, executable gate evidence per phase
+│   ├── phase1_seu_battery/             #   V1–V6 SEU validation battery
+│   ├── phase4a_parity/                 #   ported SEU vs native DYNAMO-M
+│   ├── phase4b_mesa_native/            #   tick driver vs engine loop (bit-parity)
+│   ├── preflight_4b_full/              #   PRE.1: honeybees/mesa pinning kit
+│   └── real_table_gate/                #   PRE.2: gates on the real Charleston table
+├── docs/                               # design record (architecture, phase docs, AGENTS.md)
+├── 1_create_lookup_table.ipynb         # stage 1: build the lookup table (SFINCS+FIAT)
+├── 2_simulate_adaptation.ipynb         # stage 2 (legacy ABMSimulator path)
+├── 3_simulate_adaptation_engine.ipynb  # stage 2: ⭐ SimulationEngine + SEURule path
+├── pyproject.toml                      # package metadata & dependencies (primary)
+└── environment.yml                     # optional conda environment
 ```
 
-**Key note**: The old `example/` folder is now `old_bridge_examples/` and should not be used for new projects. Use `examples_engine/` instead.
+## The two-stage pipeline
 
----
+1. **Build the lookup table** — [1_create_lookup_table.ipynb](1_create_lookup_table.ipynb) runs FloodAdapt (SFINCS + FIAT) over every `event × SLR × strategy` combination and saves `lookup_table_<site>_<event_set>.nc` (dims `object_id × slr × strategy × event`).
+2. **Simulate adaptation** — [3_simulate_adaptation_engine.ipynb](3_simulate_adaptation_engine.ipynb) (or the API above) draws Monte-Carlo event sequences, interpolates damages along the SLR axis, and applies the pluggable household decision rule each year.
 
-## Do I need all of `environment.yml` and `pyproject.toml`?
+The `.nc` lookup table is the **only** interface between the stages — keep it stable.
 
-No, they serve different purposes:
-1. **`pyproject.toml`**: **(Recommended / Primary)** This is the single source of truth for the package metadata and dependencies. It makes the package installable via `pip`.
-2. **`environment.yml`**
----
+## Decision rules (Strategy Pattern)
+
+| Rule | Behaviour | Use |
+|---|---|---|
+| `SEURule` *(default)* | DYNAMO-M SEU, ported: ex-ante expected-utility maximisation with CRRA utility, risk-perception decay, affordability cap, loan amortisation, 75-y lifespan reset | The validated MVP science |
+| `ThresholdRule` | Legacy ex-post rule: adapt when `damage/max_pot_dmg > 0.3` | Backward compat; reproduces `ABMSimulator` bit-for-bit |
+| `DynamoLiveRule` | Calls the **native** DYNAMO-M `DecisionModule` (optional, guarded import via `DYNAMO_M_PATH`) | Parity oracle — proves the port hasn't drifted |
+| your own | Subclass `DecisionRule`, implement `should_adapt(...)` | See `examples_engine/03_custom_rule.py` |
 
 ## Installation
 
-### Using pip and virtualenv (Standard Python)
-
-You can create a standard Python virtual environment and install the package using `pip` (requires Python 3.10+):
-
-1. Create a virtual environment in the project directory:
-   ```bash
-   # On Windows
-   python -m venv venv
-   
-   # On macOS/Linux
-   python3 -m venv venv
-   ```
-
-2. Activate the virtual environment:
-   ```bash
-   # On Windows (Command Prompt)
-   venv\Scripts\activate.bat
-   
-   # On Windows (PowerShell)
-   venv\Scripts\Activate.ps1
-   
-   # On macOS/Linux
-   source venv/bin/activate
-   ```
-
-3. Install the package in editable mode:
-   ```bash
-   # Basic installation
-   pip install -e .
-   
-   # Or install with developer dependencies (for running tests)
-   pip install -e .[dev]
-   
-   # Or install with the full pipeline dependency (includes flood-adapt)
-   pip install -e .[pipeline]
-   ```
-
-
----
-
-## Running the Example
-
-A coupled DYNAMO-M simulation example is located in the `example/` folder. Run it using:
+Requires Python 3.10+.
 
 ```bash
-python example/run_coupled_example.py
+python -m venv venv
+venv\Scripts\Activate.ps1        # Windows PowerShell (or: source venv/bin/activate)
+
+pip install -e .                 # core
+pip install -e .[dev]            # + pytest (run the test suite)
+pip install -e .[pipeline]       # + flood-adapt (stage-1 lookup-table builds)
 ```
 
----
+(`environment.yml` is an optional conda alternative; `pyproject.toml` is the single source of truth for dependencies.)
 
-## Running Tests
+## Examples
 
-Unit tests are written using `pytest`. You can run them in the repository root:
+The canonical learning path is [examples_engine/](examples_engine/) — six numbered scripts from a minimal run (01) through custom rules (03), Monte-Carlo uncertainty (04), the Phase-4a live-DYNAMO-M parity oracle (05), and Phase-4b Mesa-native driving (06). All run on a synthetic dataset by default; set `FA_ABM_REAL_TABLE=1` to opt into the real Charleston table.
+
+## Tests & verification
 
 ```bash
-pytest tests/ -v
+pytest tests/ -q                 # full suite incl. bit-parity gates
 ```
+
+Phase-gate evidence (reports, metrics, re-runnable harnesses) lives in [verification/](verification/); CI runs the suite and the Phase-4b gate on every push (see `.github/workflows/ci.yml`).
+
+## Documentation
+
+- [examples_engine/README.md](examples_engine/README.md) — architecture & usage walkthrough
+- [docs/AGENTS.md](docs/AGENTS.md) — deep operational guide (data requirements, schema, gotchas, phase history)
+- [docs/20260709_proposed_development_architecture_steps.md](docs/20260709_proposed_development_architecture_steps.md) — current roadmap (4b-pre → 4b-full → Phase 5)
