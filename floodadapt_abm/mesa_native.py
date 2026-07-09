@@ -88,6 +88,7 @@ class CoastalNodePopulation:
     def step(self) -> None:
         """Advance the population by one year (mirrors ``CoastalNode.step``)."""
         m = self.model
+        m._check_not_stale()
         t = m.timestep
         res = m.engine.step(
             t, float(m.slr_values[t]), m._rng, m.interp_method
@@ -170,8 +171,12 @@ class FloodAdaptSLRModel:
         self.timestep = 0
         self._rng = np.random.default_rng(seed)
 
-        # Fresh per-agent state for this sequence.
+        # Fresh per-agent state for this sequence.  The engine's state is
+        # shared: constructing a model resets it and claims the new state
+        # epoch, so any *earlier* model on the same engine becomes stale (its
+        # step() will raise rather than silently mutate this model's state).
         self.engine.reset_state()
+        self._state_epoch = engine.state_epoch
 
         # Agent object graph (mirrors SLRModel.agents = Agents(self)).
         self.agents = Agents(self)
@@ -188,6 +193,24 @@ class FloodAdaptSLRModel:
             np.full((n, self.n_timesteps), np.nan, dtype=np.float32)
             if track_eu else None
         )
+
+    # -- staleness guard ----------------------------------------------------
+    def _check_not_stale(self) -> None:
+        """
+        Raise if the engine's state has been reset since this model claimed it.
+
+        The engine's :class:`AgentState` is shared; constructing another
+        ``FloodAdaptSLRModel`` (or calling ``engine.run()`` / ``reset_state()``)
+        replaces it.  Without this guard a stale model would silently step the
+        *new* owner's state — a hard-to-attribute corruption bug.
+        """
+        if self.engine.state_epoch != self._state_epoch:
+            raise RuntimeError(
+                "This FloodAdaptSLRModel is stale: engine.reset_state() has "
+                "been called since it was constructed (e.g. by a newer model "
+                "or engine.run()). Construct a new model, or use a dedicated "
+                "SimulationEngine per concurrently-driven model."
+            )
 
     # -- recording ----------------------------------------------------------
     def _record(self, t: int, res: dict) -> None:

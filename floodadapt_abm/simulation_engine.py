@@ -112,6 +112,10 @@ class SimulationEngine:
             wealth=self._data.wealth,
             risk_perc_min=self._dec.risk_perc_min,
         )
+        # Monotonic counter bumped by every reset_state(); lets external
+        # drivers (e.g. FloodAdaptSLRModel) detect that their view of
+        # ``self.state`` has been invalidated by a later reset.
+        self.state_epoch: int = 0
 
     # -----------------------------------------------------------------------
     # Event generation
@@ -295,13 +299,20 @@ class SimulationEngine:
         }
 
     def reset_state(self) -> None:
-        """Reset per-agent state to the initial condition (fresh sequence)."""
+        """
+        Reset per-agent state to the initial condition (fresh sequence).
+
+        Increments :attr:`state_epoch` so that any driver holding a view of the
+        previous state (e.g. an earlier ``FloodAdaptSLRModel``) can detect it
+        has gone stale instead of silently stepping the wrong state.
+        """
         self.state = AgentState.initial(
             n_agents=self.n_agents,
             income=self._data.income,
             wealth=self._data.wealth,
             risk_perc_min=self._dec.risk_perc_min,
         )
+        self.state_epoch += 1
 
     def run(
         self,

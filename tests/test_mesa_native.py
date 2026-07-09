@@ -157,3 +157,43 @@ class TestLiveRuleUnderMesaNative:
         )
         loop = eng_b.run(SLR, no_seq=2, seed=9)
         assert np.array_equal(native["adapted_history"], loop["adapted_history"])
+
+
+# ---------------------------------------------------------------------------
+# PRE.3 (2026-07-09 review): shared-engine staleness guard.
+# ---------------------------------------------------------------------------
+class TestSharedEngineStalenessGuard:
+    """Constructing a second model on the same engine must not let the first
+    model silently mutate the second model's state (mesa_native.py review
+    finding, task PRE.3)."""
+
+    def test_stale_model_step_raises(self):
+        engine = _engine()
+        model_a = FloodAdaptSLRModel(engine, SLR, seed=1)
+        model_b = FloodAdaptSLRModel(engine, SLR, seed=2)  # resets shared state
+
+        with pytest.raises(RuntimeError, match="stale"):
+            model_a.step()
+        # The newer model owns the state and keeps working.
+        model_b.step()
+        assert model_b.timestep == 1
+
+    def test_engine_run_invalidates_manual_model(self):
+        engine = _engine()
+        model = FloodAdaptSLRModel(engine, SLR, seed=1)
+        model.step()
+        engine.run(SLR, no_seq=1, seed=0)  # reset_state() per sequence
+        with pytest.raises(RuntimeError, match="stale"):
+            model.step()
+
+    def test_fresh_model_unaffected(self):
+        engine = _engine()
+        model = FloodAdaptSLRModel(engine, SLR, seed=1)
+        model.run_model()
+        assert model.timestep == model.n_timesteps
+
+    def test_state_epoch_increments(self):
+        engine = _engine()
+        e0 = engine.state_epoch
+        engine.reset_state()
+        assert engine.state_epoch == e0 + 1
