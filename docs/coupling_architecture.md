@@ -1,5 +1,11 @@
 # FloodAdapt-ABM ↔ DYNAMO-M Coupling Architecture
 
+> **Companion doc:** for the consolidated development history, phase-by-phase
+> progress, roadmap and day-by-day traceability, see
+> [`20260709_proposed_architecture_all_phases.md`](20260709_proposed_architecture_all_phases.md).
+> This file is the deep architecture + SEU-math reference; that file is the
+> canonical progress/roadmap record. They are kept in lock-step.
+
 > **Revision 2026-07-09.** Relocated into the FloodAdapt-ABM repository (`docs/`) and
 > updated to reflect the completed, gated implementation through Phase 4b and the PRE.2
 > real-table gate: `floodadapt_abm/coupling_config.py` (Python `@dataclass` configuration),
