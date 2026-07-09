@@ -25,6 +25,9 @@ validated SEU decision engine.
 """
 from __future__ import annotations
 
+import copy
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 import xarray as xr
 from numpy import ndarray
@@ -321,6 +324,7 @@ class SimulationEngine:
         seed: int | None = None,
         interp_method: str = "linear",
         track_eu: bool = False,
+        n_jobs: int = 1,
     ) -> dict:
         """
         Run the engine over ``no_seq`` Monte-Carlo sequences.
@@ -344,6 +348,17 @@ class SimulationEngine:
             When ``True`` and the rule exposes them, records the per-year
             expected utilities into ``eu_history`` (memory: ``2 * no_seq *
             n_agents * n_years``).
+        n_jobs : int
+            Number of parallel workers for the Monte-Carlo sequences.  ``1``
+            (default) uses the sequential path unchanged.  ``>1`` (or ``-1`` for
+            "all cores") runs the independent sequences across a thread pool of
+            per-worker engine clones that share the read-only, pre-warmed SLR
+            interpolation cache.  Because each sequence uses an independently
+            seeded event RNG (``base_seed + s``) and writes its own slice, the
+            parallel result is **bit-identical** to ``n_jobs=1`` for decision
+            rules whose output depends only on the agent state and the event
+            draw (the default ``SEURule`` with ``error_interval == 0`` and
+            ``ThresholdRule``).
 
         Returns
         -------
@@ -372,16 +387,43 @@ class SimulationEngine:
             if track_eu else None
         )
 
-        for s in range(no_seq):
-            self.reset_state()
-            rng = np.random.default_rng(base_seed + s)
-            for t in range(n_years):
-                res = self.step(t, float(slr_values[t]), rng, interp_method)
-                damage_history[s, :, t] = res["damages"]
-                adapted_history[s, :, t] = res["is_adapted"]
-                if track_eu and res["eu_adapt"] is not None:
-                    eu_adapt_history[s, :, t] = res["eu_adapt"]
-                    eu_do_nothing_history[s, :, t] = res["eu_do_nothing"]
+        def _store(s: int, out: dict) -> None:
+            damage_history[s] = out["damages"]
+            adapted_history[s] = out["adapted"]
+            if track_eu and out["eu_adapt"] is not None:
+                eu_adapt_history[s] = out["eu_adapt"]
+                eu_do_nothing_history[s] = out["eu_do_nothing"]
+
+        if n_jobs == 1:
+            # Sequential path (unchanged): one engine, rule RNG threads across
+            # sequences exactly as before.
+            for s in range(no_seq):
+                self.reset_state()
+                rng = np.random.default_rng(base_seed + s)
+                for t in range(n_years):
+                    res = self.step(t, float(slr_values[t]), rng, interp_method)
+                    damage_history[s, :, t] = res["damages"]
+                    adapted_history[s, :, t] = res["is_adapted"]
+                    if track_eu and res["eu_adapt"] is not None:
+                        eu_adapt_history[s, :, t] = res["eu_adapt"]
+                        eu_do_nothing_history[s, :, t] = res["eu_do_nothing"]
+        else:
+            # Parallel path: independent sequences on per-worker engine clones
+            # that share a pre-warmed, read-only SLR interpolation cache.
+            self._prewarm_interp_cache(slr_values, interp_method)
+            workers = no_seq if n_jobs < 0 else min(n_jobs, no_seq)
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {
+                    pool.submit(
+                        self._simulate_one_sequence,
+                        s, slr_values, base_seed, n_years,
+                        interp_method, track_eu,
+                    ): s
+                    for s in range(no_seq)
+                }
+                for fut in futures:
+                    s = futures[fut]
+                    _store(s, fut.result())
 
         adoption_fraction = adapted_history.mean(axis=1)
         results = {
@@ -393,6 +435,76 @@ class SimulationEngine:
             results["eu_adapt_history"] = eu_adapt_history
             results["eu_do_nothing_history"] = eu_do_nothing_history
         return results
+
+    # -----------------------------------------------------------------------
+    # Parallel-sequence helpers
+    # -----------------------------------------------------------------------
+    def _prewarm_interp_cache(self, slr_values, interp_method: str) -> None:
+        """
+        Interpolate each unique SLR value once (single-threaded) so the shared
+        bridge cache is fully populated before parallel workers read from it.
+        """
+        for slr in np.unique(np.asarray(slr_values, dtype=float)):
+            self.prepare_damages(float(slr), interp_method)
+
+    def _clone_for_worker(self, seq_index: int, base_seed: int) -> "SimulationEngine":
+        """
+        Shallow-copy this engine for a single parallel sequence.
+
+        The clone shares the read-only dataset, event catalogue and (pre-warmed)
+        SLR interpolation cache, but gets its own bridge ``__dict__`` (so the
+        per-tick ``_damage_*`` slots don't race), its own fresh
+        :class:`AgentState`, and an independently seeded clone of the decision
+        rule.
+        """
+        eng = copy.copy(self)
+        eng._data = copy.copy(self._data)  # separate _damage_* slots; shared cache
+        eng.decision_rule = self.decision_rule.clone(rng_seed=base_seed + seq_index)
+        eng.state = AgentState.initial(
+            n_agents=self.n_agents,
+            income=self._data.income,
+            wealth=self._data.wealth,
+            risk_perc_min=self._dec.risk_perc_min,
+        )
+        eng.state_epoch = 0
+        return eng
+
+    def _simulate_one_sequence(
+        self,
+        seq_index: int,
+        slr_values: np.ndarray,
+        base_seed: int,
+        n_years: int,
+        interp_method: str,
+        track_eu: bool,
+    ) -> dict:
+        """Run one Monte-Carlo sequence on an isolated engine clone."""
+        eng = self._clone_for_worker(seq_index, base_seed)
+        rng = np.random.default_rng(base_seed + seq_index)
+        damages = np.zeros((self.n_agents, n_years), dtype=self.damage_dtype)
+        adapted = np.zeros((self.n_agents, n_years), dtype=bool)
+        eu_adapt = (
+            np.full((self.n_agents, n_years), np.nan, dtype=np.float32)
+            if track_eu else None
+        )
+        eu_do_nothing = (
+            np.full((self.n_agents, n_years), np.nan, dtype=np.float32)
+            if track_eu else None
+        )
+        for t in range(n_years):
+            res = eng.step(t, float(slr_values[t]), rng, interp_method)
+            damages[:, t] = res["damages"]
+            adapted[:, t] = res["is_adapted"]
+            if track_eu and res["eu_adapt"] is not None:
+                eu_adapt[:, t] = res["eu_adapt"]
+                eu_do_nothing[:, t] = res["eu_do_nothing"]
+        return {
+            "damages": damages,
+            "adapted": adapted,
+            "eu_adapt": eu_adapt,
+            "eu_do_nothing": eu_do_nothing,
+        }
+
 
     # -----------------------------------------------------------------------
     # Property

@@ -62,6 +62,26 @@ class DecisionRule(ABC):
     def __init__(self, config: DecisionConfig):
         self.config = config
 
+    def clone(self, rng_seed: int | None = None) -> "DecisionRule":
+        """
+        Return an independent copy of this rule for parallel execution.
+
+        The copy shares the (read-only) ``config`` but gets its own random
+        generator and its own per-call diagnostic slots, so it can run in a
+        separate worker without racing on shared state.  ``rng_seed`` seeds the
+        fresh generator for reproducibility; rules that draw no random numbers
+        (e.g. ``error_interval == 0``) are unaffected by it.
+        """
+        import copy as _copy
+
+        new = _copy.copy(self)
+        if hasattr(new, "_rng"):
+            new._rng = np.random.default_rng(rng_seed)
+        if hasattr(new, "last_eu_adapt"):
+            new.last_eu_adapt = None
+            new.last_eu_do_nothing = None
+        return new
+
     @abstractmethod
     def should_adapt(
         self,

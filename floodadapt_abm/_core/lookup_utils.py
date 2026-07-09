@@ -93,6 +93,70 @@ def interpolate_damage_at_slr(
     # Load into memory as float32: shape (n_agents, n_slr, n_events)
     values: np.ndarray = da.values.astype(np.float32)
 
+    return interpolate_cube_at_slr(
+        values, slr_arr, slr_target, method=method, max_pot_dmg=max_pot_dmg
+    )
+
+
+def materialize_strategy_cube(
+    ds: xr.Dataset,
+    strategy: str,
+    res_mask: np.ndarray | None = None,
+    dim_object_id: str = "object_id",
+    dim_slr: str = "slr",
+    dim_event: str = "event",
+    dim_strategy: str = "strategy",
+    var_total_damage: str = "total_damage",
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Materialize the (residential) damage cube for one strategy, once.
+
+    Loading and residential-masking the ``(n_objects, n_slr, n_events)`` cube
+    from the (lazily backed) dataset is the dominant cost of a single-SLR
+    interpolation.  Callers that interpolate at many SLR values should cache the
+    returned cube and feed it to :func:`interpolate_cube_at_slr` instead of
+    re-reading the dataset each time.
+
+    Returns
+    -------
+    values : np.ndarray[float32], shape (n_agents, n_slr, n_events)
+    slr_arr : np.ndarray[float64], shape (n_slr,)
+    """
+    slr_arr: np.ndarray = ds[dim_slr].values.astype(np.float64)
+    da: xr.DataArray = (
+        ds[var_total_damage]
+        .sel({dim_strategy: strategy})
+        .transpose(dim_object_id, dim_slr, dim_event)
+    )
+    # Materialize the full cube in NumPy first, then apply the residential mask
+    # in-memory.  Boolean ``isel`` on the (lazily backed) DataArray is
+    # pathologically slow at scale, whereas a NumPy fancy index is trivial.
+    values: np.ndarray = da.values.astype(np.float32)
+    if res_mask is not None:
+        values = values[res_mask]
+    return values, slr_arr
+
+
+def interpolate_cube_at_slr(
+    values: np.ndarray,
+    slr_arr: np.ndarray,
+    slr_target: float,
+    method: str = "linear",
+    max_pot_dmg: np.ndarray | None = None,
+) -> np.ndarray:
+    """
+    Interpolate a pre-materialized damage cube along the SLR axis.
+
+    ``values`` has shape ``(n_agents, n_slr, n_events)`` (see
+    :func:`materialize_strategy_cube`); the result is ``(n_agents, n_events)``,
+    clamped to ``[0, max_pot_dmg]``.  The interpolation math is identical to
+    :func:`interpolate_damage_at_slr` (which now delegates here), so results are
+    bit-for-bit unchanged.
+    """
+    from scipy.interpolate import interp1d  # optional heavy dependency
+
+    slr_arr = np.asarray(slr_arr, dtype=np.float64)
+
     # --- Interpolate along SLR axis (axis=1) ---------------------------------
     if method == "linear":
         f = interp1d(
@@ -141,7 +205,7 @@ def interpolate_damage_at_slr(
     if max_pot_dmg is not None:
         interpolated = np.clip(interpolated, 0.0, max_pot_dmg[:, np.newaxis])
     else:
-        np.clip(interpolated, 0.0, None, out=interpolated)  # at least no negatives
+        interpolated = np.clip(interpolated, 0.0, None)  # at least no negatives
 
     return interpolated  # shape: (n_agents, n_events)
 

@@ -199,3 +199,87 @@ def test_reset_state_clears_adaptation(mock_ds):
     eng.reset_state()
     assert not eng.state.is_adapted.any()
     assert (eng.state.time_adapted == 0).all()
+
+
+# ---------------------------------------------------------------------------
+# Per-SLR interpolation cache
+# ---------------------------------------------------------------------------
+def test_interp_cache_is_bit_identical_to_fresh(mock_ds_factory):
+    """A cached prepare_damages must return the exact arrays a fresh (uncached)
+    interpolation produces."""
+    ds = mock_ds_factory(n_objects=40, n_events=6, seed=9)
+    eng = SimulationEngine(ds=ds)
+
+    # Fresh (cache disabled).
+    eng._data._interp_cache_enabled = False
+    fresh_no, fresh_fp = eng.prepare_damages(0.7)
+    fresh_no = fresh_no.copy()
+    fresh_fp = fresh_fp.copy()
+
+    # Cached (cache enabled) — first call populates, second call hits cache.
+    eng._data._interp_cache_enabled = True
+    eng._data.clear_interp_cache()
+    eng.prepare_damages(0.7)
+    cached_no, cached_fp = eng.prepare_damages(0.7)  # cache hit
+
+    assert (0.7, "linear") in eng._data._interp_cache
+    assert np.array_equal(fresh_no, cached_no)
+    assert np.array_equal(fresh_fp, cached_fp)
+
+
+def test_interp_cache_reused_across_run(mock_ds_factory):
+    """A full run over a repeating SLR trajectory caches only the unique SLR
+    levels, not one entry per tick."""
+    ds = mock_ds_factory(n_objects=30, seed=2)
+    eng = SimulationEngine(ds=ds)
+    slr = np.array([0.0, 0.5, 1.0, 0.5, 0.0])  # 3 unique values, 5 ticks
+    eng.run(slr, no_seq=2, seed=1)
+    assert len(eng._data._interp_cache) == 3
+
+
+# ---------------------------------------------------------------------------
+# Parallel Monte-Carlo sequences (n_jobs)
+# ---------------------------------------------------------------------------
+def test_parallel_run_bit_identical_to_sequential(mock_ds_factory):
+    """run(n_jobs=4) must reproduce run(n_jobs=1) bit-for-bit (default
+    deterministic SEURule, error_interval == 0)."""
+    ds = mock_ds_factory(n_objects=50, n_events=6, seed=13)
+    slr = np.linspace(0.0, 1.5, 8)
+
+    seq = SimulationEngine(ds=ds).run(slr, no_seq=5, seed=7, track_eu=True, n_jobs=1)
+    par = SimulationEngine(ds=ds).run(slr, no_seq=5, seed=7, track_eu=True, n_jobs=4)
+
+    assert np.array_equal(seq["damage_history"], par["damage_history"])
+    assert np.array_equal(seq["adapted_history"], par["adapted_history"])
+    assert np.allclose(
+        seq["eu_adapt_history"], par["eu_adapt_history"],
+        equal_nan=True, atol=0.0, rtol=0.0,
+    )
+
+
+def test_parallel_run_threshold_rule_bit_identical(mock_ds_factory):
+    """Parallel parity also holds for the legacy ThresholdRule."""
+    ds = mock_ds_factory(n_objects=40, seed=3)
+    slr = np.linspace(0.0, 2.0, 6)
+    cfg = CouplingConfig(decision=DecisionConfig(lifespan_dryproof=None))
+
+    def _eng():
+        return SimulationEngine(
+            ds=ds, config=cfg,
+            decision_rule=ThresholdRule(cfg.decision, damage_threshold=0.1),
+        )
+
+    seq = _eng().run(slr, no_seq=4, seed=11, n_jobs=1)
+    par = _eng().run(slr, no_seq=4, seed=11, n_jobs=3)
+    assert np.array_equal(seq["damage_history"], par["damage_history"])
+    assert np.array_equal(seq["adapted_history"], par["adapted_history"])
+
+
+def test_parallel_run_does_not_mutate_shared_state(mock_ds_factory):
+    """Worker clones must isolate state — the parent engine's live state is
+    untouched by a parallel run."""
+    ds = mock_ds_factory(n_objects=25, seed=6)
+    eng = SimulationEngine(ds=ds)
+    before = eng.state.is_adapted.copy()
+    eng.run(np.linspace(0, 1.5, 5), no_seq=4, seed=2, n_jobs=4)
+    assert np.array_equal(eng.state.is_adapted, before)

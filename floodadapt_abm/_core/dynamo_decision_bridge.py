@@ -40,7 +40,11 @@ import numpy as np
 import xarray as xr
 
 from floodadapt_abm.coupling_config import CouplingConfig, DecisionConfig, NetCDFMappingConfig
-from floodadapt_abm._core.lookup_utils import interpolate_damage_at_slr
+from floodadapt_abm._core.lookup_utils import (
+    interpolate_damage_at_slr,
+    materialize_strategy_cube,
+    interpolate_cube_at_slr,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +144,21 @@ class DynamoDecisionBridge:
         self._damage_no_measures: np.ndarray | None = None
         self._damage_floodproof: np.ndarray | None = None
 
+        # -- Per-SLR interpolation cache --------------------------------------
+        # Repeated ticks/sequences at the same SLR value reuse the interpolated
+        # (no_measures, floodproof) matrices instead of re-running the scipy
+        # interpolation over the full (object x event) grid.  The SLR trajectory
+        # is identical across Monte-Carlo sequences, so this removes ``no_seq x``
+        # redundant interpolation.  The cached arrays are treated as read-only.
+        self._interp_cache: dict[tuple, tuple[np.ndarray, np.ndarray]] = {}
+        self._interp_cache_enabled: bool = True
+        self._interp_cache_max: int = 256
+        # Materialized residential damage cubes per strategy (shape
+        # (n_agents, n_slr, n_events)), built lazily once.  Re-reading and
+        # residential-masking these cubes from the (lazily backed) dataset is
+        # the dominant cost of a single-SLR interpolation, so we cache them.
+        self._strategy_cubes: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
     # -----------------------------------------------------------------------
     # Public entry points
     # -----------------------------------------------------------------------
@@ -162,7 +181,20 @@ class DynamoDecisionBridge:
             coordinate (feet for Charleston).
         interp_method : str
             scipy interpolation kind: ``'linear'``, ``'nearest'``, ``'cubic'``.
+
+        Notes
+        -----
+        Results are memoised per ``(slr_value, interp_method)`` in
+        :attr:`_interp_cache` (see :meth:`clear_interp_cache`); repeated calls at
+        the same SLR level return the cached matrices without re-interpolating.
         """
+        cache_key = (round(float(slr_value), 9), interp_method)
+        if self._interp_cache_enabled and cache_key in self._interp_cache:
+            self._damage_no_measures, self._damage_floodproof = (
+                self._interp_cache[cache_key]
+            )
+            return
+
         slr_arr = np.asarray(
             self._ds[self._nc.dimension_slr].values, dtype=np.float64
         )
@@ -176,6 +208,23 @@ class DynamoDecisionBridge:
             slr_arr, slr_value, self._nc.strategy_floodproof,
             n_events, interp_method,
         )
+
+        if self._interp_cache_enabled:
+            # Treat cached arrays as read-only shared references (downstream code
+            # never mutates the damage matrices in place).
+            self._damage_no_measures.setflags(write=False)
+            self._damage_floodproof.setflags(write=False)
+            if len(self._interp_cache) >= self._interp_cache_max:
+                self._interp_cache.pop(next(iter(self._interp_cache)))
+            self._interp_cache[cache_key] = (
+                self._damage_no_measures,
+                self._damage_floodproof,
+            )
+
+    def clear_interp_cache(self) -> None:
+        """Drop all memoised
+        (stored to be retrieved without repeating the computation) per-SLR interpolation results (frees memory)."""
+        self._interp_cache.clear()
 
     def compute_expected_annual_damages(
         self,
@@ -535,19 +584,26 @@ class DynamoDecisionBridge:
         dmg : np.ndarray[float32], shape (n_agents, n_events)
         """
         # Property capping: bound damages to [0, max_pot_dmg] and no negatives
-        # (cubic spline undershoot is handled inside lookup_utils)
-        return interpolate_damage_at_slr(
-            ds=self._ds,
-            strategy=strategy,
-            slr_target=slr_target,
-            res_mask=self._res_mask,
-            method=method,
-            max_pot_dmg=self.max_pot_dmg,
-            dim_object_id=self._nc.dimension_object_id,
-            dim_slr=self._nc.dimension_slr,
-            dim_event=self._nc.dimension_event,
-            dim_strategy=self._nc.dimension_strategy,
-            var_total_damage=self._nc.var_total_damage,
+        # (cubic spline undershoot is handled inside lookup_utils).  The
+        # residential strategy cube is materialized once and reused for every
+        # SLR target, so only the cheap per-SLR interpolation runs per call.
+        cube = self._strategy_cubes.get(strategy)
+        if cube is None:
+            cube = materialize_strategy_cube(
+                ds=self._ds,
+                strategy=strategy,
+                res_mask=self._res_mask,
+                dim_object_id=self._nc.dimension_object_id,
+                dim_slr=self._nc.dimension_slr,
+                dim_event=self._nc.dimension_event,
+                dim_strategy=self._nc.dimension_strategy,
+                var_total_damage=self._nc.var_total_damage,
+            )
+            self._strategy_cubes[strategy] = cube
+        values, slr_arr_cube = cube
+        return interpolate_cube_at_slr(
+            values, slr_arr_cube, slr_target,
+            method=method, max_pot_dmg=self.max_pot_dmg,
         )
 
 
