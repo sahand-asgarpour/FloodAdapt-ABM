@@ -436,7 +436,7 @@ When coupling with the DYNAMO-M decision bridge (`DynamoDecisionBridge`), the fo
 
 ### SEU Decision Science Validation & Test Configurations
 
-The bridge's Subjective Expected Utility (SEU) decision module has been validated against DYNAMO-M's native `decision_module.py` and against known-good edge cases using a **reproducible Phase-1 validation battery** (see `docs/coupling_architecture.md` Section 12.1 in the DYNAMO-M repo for the full specification and design rationale). This subsection documents the test configurations so that:
+The bridge's Subjective Expected Utility (SEU) decision module has been validated against DYNAMO-M's native `decision_module.py` and against known-good edge cases using a **reproducible Phase-1 validation battery** (see [`docs/architecture.md`](architecture.md) §12.1 for the full specification and design rationale). This subsection documents the test configurations so that:
 
 1. **Developers** can verify changes to `DecisionConfig` or `DynamoDecisionBridge.evaluate_decisions` without breaking the validated science.
 2. **Integration teams** understand what "correct SEU behaviour" means and can trace regressions to their source.
@@ -544,7 +544,7 @@ config = CouplingConfig()
 # Actual bridge: adoption fraction remains 0.5–1.0 (unadaptation never happens)
 # → Phase-3 requirement: add persistent time_adapted field + reset logic
 ```
-**Phase-3 commitment — STATUS: DONE (Phase 3)**: `time_adapted` lives in `AgentState`, `lifespan_dryproof` (default 75) in `DecisionConfig`, and `SimulationEngine._apply_lifespan_reset()` expires and re-decides cohorts; unit-tested incl. a long-run turnover test (`tests/test_simulation_engine.py`). The vendored V5 report predates this fix and still reads "GAP" — re-running the battery on the engine is task VER.1. See [`docs/coupling_architecture.md`](coupling_architecture.md) Phase 3 and the unified [20260709_proposed_architecture_all_phases.md](20260709_proposed_architecture_all_phases.md) for implementation details.
+**Phase-3 commitment — STATUS: DONE (Phase 3)**: `time_adapted` lives in `AgentState`, `lifespan_dryproof` (default 75) in `DecisionConfig`, and `SimulationEngine._apply_lifespan_reset()` expires and re-decides cohorts; unit-tested incl. a long-run turnover test (`tests/test_simulation_engine.py`). The vendored V5 report predates this fix and still reads "GAP" — re-running the battery on the engine is task VER.1. See [`docs/architecture.md`](architecture.md) Phase 3 for implementation details.
 
 **V6 — Cross-Check: Bridge vs Native SEU (parity oracle):**
 ```python
@@ -617,12 +617,12 @@ The Phase-1 validation covers **only the SEU decision kernel** (household risk p
 - **Dike government CBA**: Phase-beyond-MVP extension.
 - **Physical flood depths from live DYNAMO-M**: currently bypassed (use lookup table instead).
 
-The test configurations assume the **NetCDF lookup table is a true return-period set** (events at RP = 2, 5, 10, 25, 50, 100, 500 years). If a non-RP event catalogue is used, pre-process it to a damage-sorted exceedance curve (see `coupling_architecture.md` Section 1.3).
+The test configurations assume the **NetCDF lookup table is a true return-period set** (events at RP = 2, 5, 10, 25, 50, 100, 500 years). If a non-RP event catalogue is used, pre-process it to a damage-sorted exceedance curve (see [`docs/architecture.md`](architecture.md) §1.3).
 
 #### References
 
-- **Full specification & design rationale**: [`docs/coupling_architecture.md`](coupling_architecture.md) (now vendored in this repo) — MVP scope, bridge signature, complete SEU math §4, diagrams, gate history.
-- **Unified architecture, phases & progress (canonical)**: [20260709_proposed_architecture_all_phases.md](20260709_proposed_architecture_all_phases.md) — the single source of truth that consolidates every dated proposal, work log and phase model-doc. The per-day originals are retained locally under `docs/progress/` (git-excluded).
+- **Full specification, design rationale & phase history (canonical)**: [`docs/architecture.md`](architecture.md) — the single merged architecture doc (MVP scope, bridge signature, complete SEU math, UML/sequence/data-flow diagrams, every phase 0→4b-full, roadmap, day-by-day progress log). Supersedes the former `coupling_architecture.md` + `20260709_proposed_architecture_all_phases.md` (both frozen under `docs/archive/`).
+- **Whole-repo API reference**: [`../floodadapt_abm_documentation.md`](../floodadapt_abm_documentation.md) — every module, class, dataclass and function with signatures, assumptions and runnable examples. The per-day originals and per-phase model docs are retained locally under `docs/progress/` and `docs/archive/` (git-excluded).
 - **Native DYNAMO-M decision logic**: `<DYNAMO_M_PATH>\decision_module.py` (`calcEU_adapt`, `calcEU_do_nothing`, `IterateThroughFlood`).
 - **Bridge port**: `floodadapt_abm\_core\dynamo_decision_bridge.py` (`_calc_eu_adapt`, `_calc_eu_do_nothing`).
 
@@ -822,7 +822,7 @@ model.run_model()     # finish remaining years (while-loop) -> timestep == 20
 
 ```bash
 pytest tests/test_mesa_native.py -v     # 14 passed
-pytest tests/ -q                        # 125 passed
+pytest tests/ -q                        # 147 passed
 
 # full report (Markdown + JSON)
 python verification\phase4b_mesa_native\run_phase4b_verification.py
@@ -849,10 +849,10 @@ remain the shared decision kernels.
 - `verification/phase4b_mesa_native/` — verification harness, report, metrics
   (vendored in-repo).
 
-## Phase 4b-pre — de-risking & hygiene (2026-07-09, in progress)
+## Phase 4b-pre — de-risking & hygiene (2026-07-09, ✅ DONE)
 
 Post-review tasks executed before the 4b-full lift (full definitions and gate
-criteria: [20260709_proposed_architecture_all_phases.md](20260709_proposed_architecture_all_phases.md) §11.1 / §7; per-day original retained locally in `docs/progress/proposed_architecture/`):
+criteria: [`docs/architecture.md`](architecture.md) §11.1 / §7; per-day original retained locally in `docs/progress/proposed_architecture/`):
 
 - **PRE.1** `verification/preflight_4b_full/` — throwaway env + import test
   pinning honeybees/mesa against the DYNAMO-M checkout (prepared; execute on
@@ -881,4 +881,64 @@ criteria: [20260709_proposed_architecture_all_phases.md](20260709_proposed_archi
 - **VER.1 (open)** re-run the V1–V6 battery against `SimulationEngine` +
   `SEURule` (the vendored Phase-1 battery validated the original bridge path;
   its V5 "GAP" verdict predates the Phase-3 lifespan fix).
+
+## Phase 4b-full — native-class integration (2026-07-09, ✅ DONE)
+
+**Status: delivered, gated.** The final integration step binds the **real
+honeybees `Model`** as the time-owning base class (as the upstream DYNAMO-M
+`SLRModel` does) and routes each year's decision through the **native DYNAMO-M
+`DecisionModule`** (via `DynamoLiveRule`), feeding a deterministic coastal-node
+population **entirely from the FloodAdapt lookup table** through the PRE.4
+`LookupTableAdapter`. Every numeric per-year operation is still delegated to the
+validated `SimulationEngine.step` kernel with the identical RNG stream, so the
+whole path is **bit-for-bit** identical to the 4b scaffold and `engine.run`.
+
+### Design / scope
+- `FloodAdaptSLRModelFull(honeybees.model.Model)` genuinely subclasses the
+  framework `Model`; the clock (`current_time` / `current_timestep` / `end_time`)
+  is owned by honeybees. `timestep` is a 0-based property alias of
+  `current_timestep`. Per tick: `adapter.populate(slr)` → `engine.step(...)` →
+  set `node.adapt/time_adapt` → `adapter.write_back(node)`.
+- **Out of MVP scope** (intentionally): GLOFRIS, gravity CWD, `spin_up_flag`,
+  low-memory `.npz` paging, native reporter. Native `CoastalNode.step()` is too
+  entangled with that data ecosystem to drive on a dependency-free population, so
+  4b-full reuses the engine kernel for the per-tick physics and the native
+  `DecisionModule` for the decision math inside a real honeybees `Model`.
+
+### Guarded / optional dependency
+honeybees is imported defensively (`HONEYBEES_AVAILABLE`; constructing the model
+raises `HoneybeesNotAvailable` when absent), so the package and the FA-ABM suite
+still import and run without it. Native-parity paths additionally require
+`DYNAMO_M_PATH` on `sys.path` (as in Phase 4a).
+
+### Bit-parity gate (delivered)
+`run_mesa_native_full == run_mesa_native == engine.run`, element-wise, across
+multiple seeds and Monte-Carlo sequences for both `SEURule` and `ThresholdRule`;
+native-vs-ported EU parity (EU_adapt max |abs| ≈ 2.9e-6); executed end-to-end on
+the **real ~58k-household Charleston table** (runtime/memory recorded). **+22
+tests → 147 pass.**
+
+### Usage
+```python
+import os, xarray as xr
+os.environ["DYNAMO_M_PATH"] = r"c:\repos\DYNAMO-M\DYNAMO-M"   # native DecisionModule
+from floodadapt_abm import SimulationEngine, SEURule, CouplingConfig, run_mesa_native_full
+
+ds = xr.open_dataset("lookup_table_charleston_beta_release_ABM_probabilistic_set.nc")
+cfg = CouplingConfig()
+engine = SimulationEngine(ds, decision_rule=SEURule(cfg.decision), config=cfg)
+result = run_mesa_native_full(engine, [0.0, 0.1, 0.2, 0.3], no_seq=10, seed=42)
+```
+
+### Key files
+- `floodadapt_abm/mesa_native_full.py` — `FloodAdaptSLRModelFull`, `AgentsFull`,
+  `CoastalNodePopulationFull`, `run_mesa_native_full`, `HoneybeesNotAvailable`,
+  `HONEYBEES_AVAILABLE`.
+- `floodadapt_abm/coastal_node_adapter.py` — the lookup-table ↔ `CoastalNode`
+  adapter (PRE.4), now driven every tick.
+- `tests/test_mesa_native_full.py` — 22 tests (triple bit-parity, honeybees
+  clock, object graph/adapter, staleness guard, native-`DecisionModule` path).
+- `examples_engine/07_mesa_native_full.py` — runnable demo + inline bit-parity.
+- `verification/mesa_native_full/` — G1–G4 battery, report, metrics, figures
+  (`gate_pass: True` on the real table).
 

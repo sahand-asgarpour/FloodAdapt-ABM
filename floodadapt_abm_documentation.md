@@ -1,510 +1,571 @@
-# FloodAdapt-ABM — Complete Technical Documentation
+# FloodAdapt-ABM — Whole-Repo Reference Documentation
 
-## 1. Purpose & Overview
+**Scope:** the single API-level reference for the `floodadapt_abm` package — every
+module, public class, dataclass and function, with signatures, responsibilities,
+assumptions and runnable code examples. It also maps the examples/tests/verification
+layout and the module dependency graph.
 
-FloodAdapt-ABM tests how different policy incentives and flood history affect household-level adaptation decisions and long-term flood risk. It couples the FloodAdapt flood-damage model with a simple Agent-Based Model (ABM) simulator that runs Monte Carlo event sequences over a multi-decade time horizon.
+**Companion docs (read alongside this one):**
 
-The workflow has four main steps:
-1. **Set up a lookup table** with FloodAdapt (pre-compute damages for all scenario combinations)
-2. **Create multiple plausible event sequences** using Monte Carlo sampling
-3. **Evaluate flooding and impacts** for each event in each sequence (including SLR interpolation)
-4. **Update household-level adaptation** based on experienced flooding and flood impacts
+- [`README.md`](README.md) — repo front door + quickstart.
+- [`docs/architecture.md`](docs/architecture.md) — the *why* and the *design*: MVP
+  scope, the Strategy-Pattern architecture, the full SEU mathematics, UML/sequence/
+  data-flow diagrams, every delivered phase (0 → 4b-full), the roadmap and the
+  day-by-day progress log. **This file is the *what* (API); that file is the *why*.**
+- [`docs/AGENTS.md`](docs/AGENTS.md) — operational guide (data requirements, NetCDF
+  schema, gotchas, engine-performance contract).
+- [`docs/adaptation_decisions_complete.md`](docs/adaptation_decisions_complete.md) —
+  the DYNAMO-M decision-science reference (source of the ported SEU logic).
 
-Steps 3 and 4 repeat for every event in each sequence.
-
----
-
-## 2. Detailed Steps
-
-### Step 1: Generate Lookup Table (`setup_lookup_table.py`, `1_create_lookup_table.ipynb`)
-
-**Purpose**: Pre-run all possible scenario combinations to make the coupled ABM simulations computationally more efficient.
-
-**User-Defined Inputs**:
-| Input | Variable/Argument | Example Value | Description |
-|-------|-------------------|---------------|-------------|
-| FloodAdapt database path | `DATA_DIR` | `c:\...\Charleston\4_FloodAdapt\Database` | Path to the FloodAdapt database |
-| Event set name | `name_event_set` | `"probabilistic_set"` | Name of the probabilistic event set |
-| SLR range | `slr` | `np.linspace(0, 2, 5)` = [0, 0.5, 1.0, 1.5, 2.0] ft | Sea Level Rise values covering 30-year projections |
-| Unit system | `unit` | `UnitTypesLength.feet` | Length unit for SLR and floodproofing |
-| Floodproof height | `fp_height` | `2` (feet) | Building elevation height for the floodproofing strategy |
-| SFINCS binary path | `SFINCS_BIN_PATH` | Path to `sfincs.exe` | Hydrodynamic model binary |
-| FIAT binary path | `FIAT_BIN_PATH` | Path to `fiat.exe` | Flood impact assessment binary |
-
-**Process** (function `create_lookup_table()`):
-1. `create_combinations_matrix()` — Creates all scenario combinations from:
-   - **Strategies**: `no_measures` (baseline) and `floodproof_all_0` (elevate all buildings by `fp_height`)
-   - **Projections**: One per SLR value, each with `sea_level_rise` set and zero socioeconomic change
-   - **Events**: All sub-events extracted from the event set
-   - Result: a full factorial of strategies × projections × events → list of `Scenario` objects
-2. `save_combinations_to_database()` — Persists projections, measures, strategies, and scenarios to the FloodAdapt database
-3. `run_scenarios()` — Runs each scenario through FloodAdapt (SFINCS + FIAT), optionally cleans up non-impact output files
-4. `read_impacts_dataset()` — Reads results into an xarray `Dataset` with:
-   - **Coordinates**: `object_id` (building IDs), `slr`, `strategy`, `event`
-   - **Data variables**: `inun_depth` (inundation depth) and `total_damage` (monetary damage in $)
-   - **Attributes**: `max_pot_dmg` (max potential damage per building), `primary_object_type`, `freq` (event frequencies)
-
-**Output**: A NetCDF file (`lookup_table_<site_name>.nc`) containing the complete lookup table.
+**Status:** implementation complete and gated through **Phase 4b-full** (native-class
+integration) + the PRE.2 real-table gate; full `pytest` suite **147 tests, all pass**.
 
 ---
 
-### Step 2: Setup Event Sequences with Monte Carlo (`ABMSimulator.__init__` → `generate_event_sequences()`)
+## Table of contents
 
-**Purpose**: Generate synthetic multi-year event timelines for probabilistic assessment.
-
-**User-Defined Inputs**:
-| Input | Variable | Default/Example | Description |
-|-------|----------|-----------------|-------------|
-| Time step (Δt) | `dt` (derived from `times`) | 1 year | Temporal resolution |
-| Time horizon | `times` | `range(2020, 2051)` → 30 years | Simulation period |
-| Number of sequences | `no_seq` | 1000 | Monte Carlo sample count |
-| Random seed | `seed` | 42 | Reproducibility seed |
-
-#### Concept — Bernoulli Distribution of Events
-
-Each flood event in FloodAdapt's probabilistic event set has an associated **frequency of occurrence** (f_occ), expressed as the average number of times the event occurs per year (e.g., a 100-year event has f_occ = 0.01/yr).
-
-The key insight is that within any single time step Δt, a given event either **happens** (1) or **does not happen** (0) — this is a classic **Bernoulli trial**. A Bernoulli distribution is the simplest discrete probability distribution: it models a single binary experiment with exactly two outcomes — "success" (event occurs) and "failure" (event does not occur).
-
-##### What is a Bernoulli Distribution?
-
-Named after Swiss mathematician Jacob Bernoulli, the Bernoulli distribution describes a random variable *X* that takes the value 1 with probability *p* and the value 0 with probability *1 − p*. It is the building block of more complex distributions (e.g., a Binomial distribution is the sum of multiple independent Bernoulli trials).
-
-**Probability mass function**:
-```
-P(X = 1) = p          (event occurs)
-P(X = 0) = 1 - p      (event does not occur)
-```
-
-**Key properties**:
-- Mean: E[X] = p
-- Variance: Var(X) = p × (1 - p)
-- The distribution is fully determined by a single parameter *p*
-
-##### Formulation in FloodAdapt-ABM
-
-For each event *e* with frequency f_occ,e and time step Δt:
-
-```
-X_e ~ Bernoulli(p_e)
-
-where:  p_e = f_occ,e × Δt     (probability of occurrence in one time step)
-        1 - p_e                 (probability of non-occurrence)
-```
-
-**Example**: A 10-year return period event (f_occ = 0.1/yr) with Δt = 1 year:
-- p = 0.1 × 1 = 0.1 (10% chance per year)
-- 1 - p = 0.9 (90% chance of NOT occurring)
-
-**Example**: A 100-year return period event (f_occ = 0.01/yr) with Δt = 1 year:
-- p = 0.01 × 1 = 0.01 (1% chance per year)
-- 1 - p = 0.99 (99% chance of NOT occurring)
-
-##### Why Bernoulli?
-
-This formulation assumes:
-- Events are **independent across time steps** (memoryless — last year's flood doesn't affect this year's probability)
-- Events are **independent of each other** (e.g., a hurricane and a nor'easter are sampled independently)
-- At most **one occurrence** of each event type per time step is expected (valid when f_occ × Δt ≤ 1)
-
-These are standard assumptions in probabilistic flood risk analysis. The Bernoulli approach is computationally efficient and well-suited for generating diverse synthetic event timelines via Monte Carlo sampling.
-
-##### Minor Event Filter
-
-Events with f_occ > 1/Δt are omitted from sampling. With Δt = 1 year, this filters out events that occur more than once per year. The assumption is that minor, very frequent events do not cause significant flooding or damage. If this assumption doesn't hold, the user should choose a smaller time step.
-
-##### Implementation (in `generate_event_sequences()`)
-```python
-# For each eligible event, compute Bernoulli probability
-probs = [freq * dt for freq in event_frequencies if freq <= 1.0 / dt]
-
-# Draw random samples: shape (n_sequences, n_years, n_events)
-rng = np.random.default_rng(seed)
-draws = rng.random((no_seq, n_years, n_events))
-
-# Event occurs if draw < probability (Bernoulli trial)
-occurrences = draws < probs  # Boolean array
-```
-
-The result is converted into a list of sequences, where each sequence is a list of years, and each year contains a list of event names that occurred.
-
-**Output**: `self.sequences` — a list of `no_seq` event sequences, each containing `time_steps` years of event lists.
+1. [Package overview & public API](#1-package-overview--public-api)
+2. [Two-stage pipeline & module dependency map](#2-two-stage-pipeline--module-dependency-map)
+3. [Configuration — `coupling_config.py`](#3-configuration--coupling_configpy)
+4. [Agent state — `agent_state.py`](#4-agent-state--agent_statepy)
+5. [Decision rules — `decision_rule.py`](#5-decision-rules--decision_rulepy)
+6. [Stochastic events — `event_utils.py`](#6-stochastic-events--event_utilspy)
+7. [Simulation engine — `simulation_engine.py`](#7-simulation-engine--simulation_enginepy)
+8. [Live parity rule — `dynamo_live_rule.py` (Phase 4a)](#8-live-parity-rule--dynamo_live_rulepy-phase-4a)
+9. [Mesa-native scaffold — `mesa_native.py` (Phase 4b)](#9-mesa-native-scaffold--mesa_nativepy-phase-4b)
+10. [Native-class integration — `mesa_native_full.py` (Phase 4b-full)](#10-native-class-integration--mesa_native_fullpy-phase-4b-full)
+11. [Lookup-table adapter — `coastal_node_adapter.py`](#11-lookup-table-adapter--coastal_node_adapterpy)
+12. [Ported kernels — `_core/`](#12-ported-kernels--_core)
+13. [Stage-1 pipeline — `setup_lookup_table.py`](#13-stage-1-pipeline--setup_lookup_tablepy)
+14. [Legacy simulator — `abm_simulator.py`](#14-legacy-simulator--abm_simulatorpy)
+15. [Examples, tests & verification](#15-examples-tests--verification)
+16. [Global assumptions & invariants](#16-global-assumptions--invariants)
 
 ---
 
-### Step 3: Calculate Impacts for Each Event (`_simulate_damage_history()`)
+## 1. Package overview & public API
 
-**Purpose**: For every event that occurs in a sequence, look up (via interpolation) the corresponding damage from the lookup table, accounting for the current SLR and adaptation status.
+`floodadapt_abm` is an agent-based flood-adaptation simulator whose household
+decision logic is the DYNAMO-M **Subjective Expected Utility (SEU)** model. Buildings
+("agents") each year decide whether to **dry-floodproof** based on perceived flood
+risk, expected damages, income/wealth and the cost of adaptation.
 
-**Process**:
-1. Pre-compute two full damage matrices via `interpolate_damage_matrix()`:
-   - `damage_matrix_no_measures`: shape `(n_households, n_events, n_time_steps)` — damages WITHOUT adaptation
-   - `damage_matrix_floodproofing_all`: shape `(n_households, n_events, n_time_steps)` — damages WITH floodproofing
-2. The interpolation uses SLR values at each time step to interpolate between the discrete SLR scenarios in the lookup table
-3. Supported interpolation methods: `linear` (default), `nearest`, `cubic`, `floor`, `ceil`
-4. For each sequence, for each year, for each event that occurs:
-   - Look up damage from `damage_matrix_no_measures` for non-adapted households
-   - Look up damage from `damage_matrix_floodproofing_all` for adapted households
-   - Combine: `damages = np.where(is_floodproofed, damages_floodproofing, damages_no_measures)`
+Everything importable from the top-level package (`floodadapt_abm/__init__.py`):
 
-#### Worked Example — Understanding the Damage Matrices
+| Symbol | Kind | Summary |
+|---|---|---|
+| `SimulationEngine` | class | **Recommended entry point.** Owns time, data plumbing, event generation, the lifespan reset, and a pluggable `DecisionRule`. |
+| `DecisionRule` | ABC | Strategy interface — subclass to define new adaptation logic. |
+| `ThresholdRule` | class | Legacy reactive heuristic (adapt when damage ≥ threshold). |
+| `SEURule` | class | The MVP science: ported DYNAMO-M SEU decision rule. |
+| `AgentState` | dataclass | Vectorised per-agent state arrays. |
+| `CouplingConfig` / `DecisionConfig` / `NetCDFMappingConfig` | dataclasses | Configuration. |
+| `draw_year_events` / `generate_event_sequences` | funcs | Unified stochastic event generator. |
+| `DynamoLiveRule` / `DynamoMNotAvailable` / `DYNAMO_M_AVAILABLE` | class/exc/flag | Phase 4a live-parity rule (guarded native DYNAMO-M import). |
+| `FloodAdaptSLRModel` / `CoastalNodePopulation` / `MesaAgents` / `run_mesa_native` | classes/func | Phase 4b Mesa-native scaffold (framework-free time-ownership inversion). |
+| `FloodAdaptSLRModelFull` / `CoastalNodePopulationFull` / `AgentsFull` / `run_mesa_native_full` / `HoneybeesNotAvailable` / `HONEYBEES_AVAILABLE` | classes/func/exc/flag | Phase 4b-full native-class integration (real honeybees `Model`). |
+| `ABMSimulator` | class | **Deprecated** legacy stage-2 simulator (kept for the Gate-1 regression). |
+| `DynamoDecisionBridge` | class | Internal `_core` plumbing, re-exported for backward compat. |
 
-Consider a small scenario with **3 buildings**, **2 events**, and **3 simulation years** (2020, 2021, 2022) with SLR values [0.0, 0.5, 1.0] ft respectively.
-
-##### What is in the lookup table (raw, before interpolation)
-
-The lookup table (NetCDF) stores damage for every combination of `(building, event, SLR_level, strategy)`. For example, with SLR grid [0.0, 0.5, 1.0, 1.5, 2.0] ft:
-
-```
-ds_impacts["total_damage"]  →  shape: (3 buildings, 5 SLR levels, 2 strategies, 2 events)
-```
-
-##### What `interpolate_damage_matrix()` produces
-
-The function takes the per-year SLR values `[0.0, 0.5, 1.0]` and interpolates the lookup table along the SLR axis for a given strategy. The result is a 3D array where **each cell answers**: *"If this event hits this building at this year's SLR level, what is the damage?"*
-
-**`damage_matrix_no_measures`** — shape `(3 buildings, 2 events, 3 years)`:
-
-```
-                          Year 2020        Year 2021        Year 2022
-                         (SLR=0.0ft)      (SLR=0.5ft)      (SLR=1.0ft)
-                     ┌─────────────────┬─────────────────┬─────────────────┐
-Building 101         │                 │                 │                 │
-  Event "hurricane"  │    $12,000      │    $18,000      │    $25,000      │
-  Event "nor_easter" │     $3,000      │     $5,000      │     $8,000      │
-├────────────────────┼─────────────────┼─────────────────┼─────────────────┤
-Building 102         │                 │                 │                 │
-  Event "hurricane"  │    $45,000      │    $52,000      │    $60,000      │
-  Event "nor_easter" │     $8,000      │    $12,000      │    $18,000      │
-├────────────────────┼─────────────────┼─────────────────┼─────────────────┤
-Building 103         │                 │                 │                 │
-  Event "hurricane"  │         $0      │     $2,000      │     $6,000      │
-  Event "nor_easter" │         $0      │         $0      │     $1,000      │
-└────────────────────┴─────────────────┴─────────────────┴─────────────────┘
-```
-
-Notice that damages **increase across years** because SLR increases → deeper flooding → more damage. Building 103 sits on higher ground so it only gets damaged at higher SLR.
-
-**`damage_matrix_floodproofing_all`** — same shape `(3, 2, 3)`, but with **reduced damages** because buildings are elevated:
-
-```
-                          Year 2020        Year 2021        Year 2022
-                         (SLR=0.0ft)      (SLR=0.5ft)      (SLR=1.0ft)
-                     ┌─────────────────┬─────────────────┬─────────────────┐
-Building 101         │                 │                 │                 │
-  Event "hurricane"  │     $2,000      │     $5,000      │    $10,000      │
-  Event "nor_easter" │         $0      │     $1,000      │     $3,000      │
-├────────────────────┼─────────────────┼─────────────────┼─────────────────┤
-Building 102         │                 │                 │                 │
-  Event "hurricane"  │    $10,000      │    $18,000      │    $28,000      │
-  Event "nor_easter" │     $1,000      │     $3,000      │     $7,000      │
-├────────────────────┼─────────────────┼─────────────────┼─────────────────┤
-Building 103         │                 │                 │                 │
-  Event "hurricane"  │         $0      │         $0      │     $1,000      │
-  Event "nor_easter" │         $0      │         $0      │         $0      │
-└────────────────────┴─────────────────┴─────────────────┴─────────────────┘
-```
-
-Damages are lower because the 2ft elevation keeps water out (partially or fully).
-
-##### How these matrices are used during the simulation
-
-Suppose in **Year 2021** (time index `ti=1`) of a Monte Carlo sequence, the Bernoulli draw says **only the "hurricane" event occurred** (nor'easter did not):
+`setup_lookup_table` is intentionally **not** imported by `__init__.py` (it needs the
+full `flood-adapt` library, absent in some envs). Import it explicitly:
 
 ```python
-year_events = ["hurricane"]       # from sequences[s][1]
-event_idx = 0                     # "hurricane" is event index 0
-ti = 1                            # year 2021
-
-# Look up the column for this event at this year's SLR:
-damages_no_measures = damage_matrix_no_measures[:, event_idx, ti]
-#                   = [$18,000,  $52,000,  $2,000]   ← one value per building
-
-damages_floodproofed = damage_matrix_floodproofing_all[:, event_idx, ti]
-#                    = [$5,000,  $18,000,  $0]        ← reduced by elevation
-
-# Apply adaptation status (suppose Building 102 is already floodproofed):
-is_floodproofed = [False, True, False]
-
-damages = np.where(is_floodproofed, damages_floodproofed, damages_no_measures)
-#       = [$18,000,  $18,000,  $2,000]
-#           ↑ no adapt  ↑ adapted    ↑ no adapt
-#           (full dmg)  (reduced)   (full dmg)
-
-total_damage += damages   # accumulated for this year
+from floodadapt_abm.setup_lookup_table import create_lookup_table
 ```
 
-If **both events** occurred in the same year, both damage columns would be summed:
+**Minimal end-to-end run:**
 
 ```python
-# Hurricane damage + Nor'easter damage for year 2021:
-total_damage = [$18,000 + $5,000,  $18,000 + $3,000,  $2,000 + $0]
-             = [$23,000,           $21,000,            $2,000]
+import xarray as xr
+from floodadapt_abm import SimulationEngine, SEURule, CouplingConfig
+
+ds = xr.open_dataset("lookup_table_charleston_beta_release_ABM_probabilistic_set.nc")
+cfg = CouplingConfig()                      # all defaults (Charleston-calibrated)
+rule = SEURule(cfg.decision, rng=None)      # the DYNAMO-M SEU science
+engine = SimulationEngine(ds, decision_rule=rule, config=cfg)
+
+slr_values = [0.0, 0.1, 0.2, 0.3]           # SLR (feet) per simulated year
+result = engine.run(slr_values, no_seq=100, seed=42, n_jobs=4)
+# result -> dict of stacked per-year/per-sequence arrays (damages, adopted, ...)
 ```
-
-> **Key insight**: The matrices are pre-computed for ALL events × ALL years, but only the events that actually occur (via the Monte Carlo Bernoulli draw) contribute to a given year's `total_damage`. This is why the lookup table approach is efficient — heavy SFINCS+FIAT computations happen once upfront, and the simulation just indexes into the pre-computed results.
-
-**Output**:
-- `damage_history`: array of shape `(n_sequences, n_households, n_years)` — monetary damage per household per year
-- `baseline_damage_history`: same shape — damage WITHOUT any adaptation (for comparison)
 
 ---
 
-### Step 4: Update Household-Level Adaptation
+## 2. Two-stage pipeline & module dependency map
 
-**Purpose**: After each event, decide which households adopt floodproofing.
+The coupling is a **two-stage pipeline**:
 
-**Current Rule** (simple threshold — to be replaced by DYNAMO-M):
+- **Stage 1 — build the lookup table** (`setup_lookup_table.py`, needs `flood-adapt`):
+  runs FloodAdapt hazard/impact scenarios once and bakes a
+  `(object_id × event × slr × strategy)` **NetCDF damage cube**. Produced offline.
+- **Stage 2 — the ABM** (everything else, needs only NumPy/xarray/SciPy): reads the
+  cube and runs the Monte-Carlo adaptation simulation. `flood-adapt` is **not** a
+  runtime dependency of stage 2.
+
+```
+                 SimulationEngine  ── owns time, data, events, lifespan reset
+                    │  holds a
+                    ▼
+                 DecisionRule (ABC)
+        ┌───────────┼───────────────┬──────────────────┐
+   ThresholdRule  SEURule       DynamoLiveRule (4a)   (your rule)
+                    │                │ delegates to
+                    │ uses           ▼
+                    │           native DYNAMO-M DecisionModule (guarded)
+                    ▼
+   _core/dynamo_decision_bridge.py  ── ported SEU math + per-SLR interp cache
+                    │ uses
+                    ▼
+   _core/lookup_utils.py            ── SLR→damage interpolation kernel
+                    ▲
+                    │ reads
+   setup_lookup_table.py (stage 1)  ── writes the NetCDF cube
+
+Time drivers over the SAME engine kernel (bit-for-bit equivalent):
+   engine.run(...)                       (engine owns time)
+   run_mesa_native(engine, ...)          (4b scaffold owns time)
+   run_mesa_native_full(engine, ...)     (4b-full: real honeybees Model owns time)
+        │ per tick uses
+        ▼
+   coastal_node_adapter.LookupTableAdapter  ── lookup-table ↔ CoastalNode arrays
+
+   agent_state.AgentState  ── the vectorised state every rule receives
+   event_utils             ── the single stochastic event generator
+   coupling_config         ── dataclasses consumed everywhere
+```
+
+**Key invariant:** `engine.run`, `run_mesa_native` and `run_mesa_native_full` all
+delegate every numeric per-year operation to the same `SimulationEngine.step` kernel
+with the same RNG stream, so they are **bit-for-bit identical**. The time drivers only
+differ in *who owns the clock*.
+
+---
+
+## 3. Configuration — `coupling_config.py`
+
+Three frozen-by-convention `@dataclass`es. All defaults are calibrated to the
+Charleston probabilistic table and DYNAMO-M `settings.yml`; override fields at
+construction to retarget.
+
+### `NetCDFMappingConfig`
+Maps logical names to the dataset's dimension/variable/attribute names — the *only*
+thing to change if the lookup-table schema changes.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `dimension_object_id` | `"object_id"` | building dimension |
+| `dimension_event` | `"event"` | event dimension |
+| `dimension_slr` | `"slr"` | sea-level-rise dimension |
+| `dimension_strategy` | `"strategy"` | strategy dimension |
+| `var_total_damage` | `"total_damage"` | total-damage variable |
+| `var_inun_depth` | `"inun_depth"` | inundation-depth variable |
+| `attr_max_pot_dmg` | `"max_pot_dmg"` | max potential damage (on `object_id`) |
+| `attr_event_freq` | `"freq"` | event frequency (on `event`) |
+| `attr_building_type` | `"primary_object_type"` | type list (on `object_id`) |
+| `residential_substring` | `"RES"` | residential filter (matches `RES`, `COM_RES`, …) |
+| `strategy_no_measures` | `"no_measures"` | baseline strategy label |
+| `strategy_floodproof` | `"floodproof_all_0"` | adapted strategy label |
+
+### `DecisionConfig`
+SEU behavioural parameters. **Docstring defaults are authoritative** and match
+DYNAMO-M `settings.yml`:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `risk_aversion` (σ) | `1.0` | CRRA coefficient; `1.0` → log-utility |
+| `discount_rate` (r) | `0.032` | annual NPV discount rate |
+| `decision_horizon` (T) | `15` | planning horizon (years) |
+| `risk_perc_min` | `0.01` | risk-perception floor |
+| `risk_perc_max` | `2.0` | risk-perception ceiling (post-flood) |
+| `risk_perc_coef` | `-3.6` | exponential decay coefficient |
+| `loan_duration` | `16` | adaptation loan term (years) |
+| `interest_rate` | `0.04` | loan interest rate |
+| `adaptation_cost_fraction` | `0.10` | fallback adapt cost as fraction of `max_pot_dmg` |
+| `expenditure_cap` | `0.06` | max fraction of income spendable on adaptation |
+| `amenity_weight` | `1.0` | weight on amenity value in NPV |
+| `error_interval` | `0.0` | half-width of uniform EU error (0 → deterministic) |
+| `income_to_wealth_ratio` | `4.14` | income→wealth multiplier when wealth absent |
+| `max_events_per_year` | `4` | cap on stochastic events per year (see §6) |
+| `lifespan_dryproof` | `75` | dry-floodproofing service life (years); triggers reset |
+
+Risk-perception law:
+`risk_perc = risk_perc_max · 1.6^(risk_perc_coef · flood_timer) + risk_perc_min`.
+
+### `CouplingConfig`
+Container: `netcdf: NetCDFMappingConfig`, `decision: DecisionConfig`,
+`random_seed: int = 42`.
+
 ```python
-# For each household not yet floodproofed:
-if (total_damage / max_potential_damage) > damage_threshold:
-    is_floodproofed = True
-```
-
-**User-Defined Input**:
-| Input | Variable | Default | Description |
-|-------|----------|---------|-------------|
-| Damage threshold | `damage_threshold` | 0.3 (30%) | Fraction of max potential damage that triggers floodproofing |
-
-**Assumed behaviour**: Once a household is floodproofed, it remains floodproofed for all subsequent events (irreversible in current implementation). The household elevation is assumed fixed at the `fp_height` value defined during lookup table creation.
-
-**Output**: `floodproofed` — boolean array of shape `(n_sequences, n_households, n_years)`
-
----
-
-## 3. Complete Parameter Summary
-
-### User-Defined Inputs
-| Parameter | Where Set | Type | Description |
-|-----------|-----------|------|-------------|
-| SLR range | Notebook 1 | `np.ndarray` (feet) | Sea level rise scenarios for lookup table |
-| Floodproof height | Notebook 1 | `float` (feet) | Elevation height for floodproofing strategy |
-| Event set name | Notebook 1 | `str` | Name of probabilistic event set in FloodAdapt |
-| Time horizon | Notebook 2 | `list[int]` | Years to simulate (e.g., 2020–2050) |
-| SLR projection values | Notebook 2 | `np.ndarray` | SLR per year (from FloodAdapt projections) |
-| Number of sequences | Notebook 2 | `int` | Monte Carlo sample count (default: 1000) |
-| Random seed | Notebook 2 | `int` | Reproducibility (default: 42) |
-| Damage threshold | Notebook 2 | `float` | Adaptation trigger (default: 0.3) |
-| Interpolation method | Notebook 2 | `str` | Damage interpolation: linear, nearest, cubic, floor, ceil |
-| Damage dtype | Notebook 2 | `np.dtype` | Storage precision for damages (default: `np.int32`) |
-
-### Assumed Parameters
-| Assumption | Value | Justification |
-|------------|-------|---------------|
-| Event independence | True | Bernoulli sampling assumes memoryless, independent events |
-| Minor event cutoff | f_occ > 1/Δt filtered | Minor events assumed non-damaging |
-| Adaptation irreversibility | Once floodproofed, always floodproofed | Simplification; no measure degradation |
-| Socioeconomic change | Zero | No population growth or economic change in projections |
-| Fixed floodproof height | `fp_height` (e.g., 2 ft) | Same elevation for all buildings |
-
-### Final Outputs
-| Output | Shape | Type | Description |
-|--------|-------|------|-------------|
-| `damage_history` | `(n_seq, n_hh, n_years)` | `np.int32` | Monetary damage per household per year (with adaptation) |
-| `baseline_damage_history` | `(n_seq, n_hh, n_years)` | `np.int32` | Monetary damage per household per year (no adaptation) |
-| `floodproofed` | `(n_seq, n_hh, n_years)` | `bool` | Floodproofing status per household per year |
-| Lookup table NetCDF | — | `xr.Dataset` | Pre-computed damage/depth for all scenario combinations |
-
----
-
-## 4. UML Class Diagram
-
-```mermaid
-classDiagram
-    class ABMSimulator {
-        +xr.Dataset ds_impacts
-        +list times
-        +int dt
-        +int time_steps
-        +np.ndarray slr_values
-        +int no_seq
-        +float damage_threshold
-        +int seed
-        +int n_households
-        +np.ndarray strategies
-        +np.ndarray event_names
-        +np.ndarray max_pot_dmg
-        +str dmg_unit
-        +str slr_unit
-        +np.dtype damage_dtype
-        +list sequences
-        +np.ndarray damage_history
-        +np.ndarray baseline_damage_history
-        +np.ndarray floodproofed
-        +bool has_run
-        +run_simulation(method: str)
-        +generate_event_sequences() list
-        +interpolate_damage_matrix(slr_values, event_names_list, strategy, method) np.ndarray
-        +plot_event_damage_timeseries(seq_id, figsize)
-        +plot_total_damage_statistics(percentiles, figsize)
-        -_compute_baseline_no_measures()
-        -_simulate_damage_history(floodproofing: bool, method: str) tuple
-        -_interpolate_damage_grid(slr_sim, damages_values, slr_values, method)$ np.ndarray
-    }
-
-    class setup_lookup_table {
-        +get_events_freq(fa, name_event_set) list
-        +create_combinations_matrix(fa, name_event_set, slr, unit, fp_height) tuple
-        +save_combinations_to_database(fa, projections, strategies, scenarios, flood_proofs)
-        +run_scenarios(fa, scenarios, clean: bool)
-        +read_impacts_dataset(fa, projections, strategies, events, slr) xr.Dataset
-        +create_lookup_table(fa, name_event_set, slr, unit, fp_height) xr.Dataset
-    }
-
-    class FloodAdapt {
-        +Database database
-        +get_event(name) EventSet
-        +save_projection(proj)
-        +save_measure(measure)
-        +save_strategy(strategy)
-        +save_scenario(scenario)
-        +run_scenario(name)
-        +get_scenarios() dict
-        +get_building_footprint_impacts(name) GeoDataFrame
-    }
-
-    class LookupTable_xrDataset {
-        +coords: object_id, slr, strategy, event
-        +data_vars: inun_depth, total_damage
-        +attrs: max_pot_dmg, freq, primary_object_type
-    }
-
-    setup_lookup_table --> FloodAdapt : uses API
-    setup_lookup_table --> LookupTable_xrDataset : creates
-    ABMSimulator --> LookupTable_xrDataset : reads ds_impacts
+from floodadapt_abm import CouplingConfig
+cfg = CouplingConfig()
+cfg.netcdf.residential_substring = "COM"   # target commercial buildings
+cfg.decision.risk_aversion = 2.0            # more risk-averse households
 ```
 
 ---
 
-## 5. Simulation Flowchart
+## 4. Agent state — `agent_state.py`
 
-```mermaid
-flowchart TD
-    A["Start: Load lookup table NetCDF"] --> B["Initialize ABMSimulator"]
-    B --> C["generate_event_sequences()"]
-    C --> C1["Filter events: keep only f_occ ≤ 1/Δt"]
-    C1 --> C2["For each event: p = f_occ × Δt<br/>(Bernoulli probability)"]
-    C2 --> C3["Draw random samples<br/>(n_seq × n_years × n_events)"]
-    C3 --> C4["Event occurs if draw < p"]
-    C4 --> C5["Build sequences: list of event names<br/>per year per sequence"]
+### `AgentState` (dataclass)
+Vectorised per-agent state; every array has shape `(n_agents,)`. This is the single
+container passed to each `DecisionRule.should_adapt`.
 
-    B --> D["run_simulation()"]
-    D --> D1["_compute_baseline_no_measures()"]
-    D1 --> D2["_simulate_damage_history(floodproofing=False)"]
-    D2 --> D2a["interpolate_damage_matrix(strategy='no_measures')"]
-    D2a --> D2b["For each sequence, year, event:<br/>accumulate damage"]
-    D2b --> D2c["Store baseline_damage_history"]
+| Field | dtype | Meaning |
+|---|---|---|
+| `wealth` | float32 | household wealth |
+| `income` | float32 | annual income |
+| `risk_perception` | float32 | subjective risk multiplier |
+| `flood_timer` | int32 | years since last flood (decays risk perception) |
+| `is_adapted` | bool | current dry-floodproofing status |
+| `time_adapted` | int32 | age of the current adaptation (drives the lifespan reset) |
 
-    D --> D3["_simulate_damage_history(floodproofing=True)"]
-    D3 --> D3a["interpolate_damage_matrix(strategy='no_measures')"]
-    D3 --> D3b["interpolate_damage_matrix(strategy='floodproof_all_0')"]
-    D3a --> E
-    D3b --> E
+**API:** `n_agents` (property), `AgentState.initial(n_agents, income, wealth,
+risk_perc_min, initial_flood_timer=99)` (classmethod; all agents start un-adapted with
+`flood_timer=99` so initial risk perception sits at the floor), and `copy()` (deep).
 
-    E["Loop: for each sequence"] --> F["Loop: for each year"]
-    F --> G["Loop: for each event this year"]
-    G --> H["Lookup damage from matrix at current SLR"]
-    H --> I{"Household floodproofed?"}
-    I -->|Yes| J["Use floodproofed damage"]
-    I -->|No| K["Use no-measures damage"]
-    J --> L["Accumulate total_damage for year"]
-    K --> L
-    L --> M{"More events this year?"}
-    M -->|Yes| G
-    M -->|No| N["Update adaptation decisions"]
-
-    N --> O{"total_damage / max_pot_dmg > threshold?"}
-    O -->|Yes| P["Set is_floodproofed = True"]
-    O -->|No| Q["Keep current status"]
-    P --> R{"More years?"}
-    Q --> R
-    R -->|Yes| F
-    R -->|No| S{"More sequences?"}
-    S -->|Yes| E
-    S -->|No| T["Store damage_history, floodproofed arrays"]
-    T --> U["End: Plotting & Analysis"]
+```python
+import numpy as np
+from floodadapt_abm import AgentState
+st = AgentState.initial(3, income=np.array([40e3, 55e3, 70e3]),
+                        wealth=np.array([160e3, 220e3, 300e3]), risk_perc_min=0.01)
 ```
 
 ---
 
-## 6. Sequence Diagram — `run_simulation()`
+## 5. Decision rules — `decision_rule.py`
 
-```mermaid
-sequenceDiagram
-    participant User as User / Notebook
-    participant Sim as ABMSimulator
-    participant LUT as Lookup Table (xr.Dataset)
-    participant Interp as _interpolate_damage_grid
+The Strategy Pattern seam. All rules implement one method:
 
-    User->>Sim: ABMSimulator(ds_impacts, times, slr_values, ...)
-    Sim->>Sim: generate_event_sequences()
-    Note over Sim: Filter events by f_occ ≤ 1/Δt<br/>Bernoulli sampling: draws < p
+```python
+should_adapt(agent_state, damages_this_year, damages_no_adapt, damages_adapt,
+             event_freqs, max_pot_dmg, adaptation_costs) -> np.ndarray[bool]
+```
 
-    User->>Sim: run_simulation(method='linear')
+which returns a boolean mask of **currently non-adapted** agents that newly adapt this
+year. Adaptation is irreversible within a year and never double-applied.
 
-    rect rgb(240, 248, 255)
-        Note over Sim: Phase 1: Baseline (no adaptation)
-        Sim->>Sim: _compute_baseline_no_measures()
-        Sim->>Sim: _simulate_damage_history(floodproofing=False)
-        Sim->>LUT: interpolate_damage_matrix('no_measures')
-        LUT->>Interp: _interpolate_damage_grid(slr_sim, damages, slr_values)
-        Interp-->>LUT: damage_matrix_no_measures[n_hh, n_events, n_slr]
-        LUT-->>Sim: damage_matrix_no_measures
-        loop For each sequence × year × event
-            Sim->>Sim: Accumulate damage (no adaptation applied)
-        end
-        Sim-->>Sim: baseline_damage_history
-    end
+### `DecisionRule(ABC)`
+- `__init__(config)` — stores a `DecisionConfig`.
+- `clone(rng_seed=None)` — independent copy for parallel execution (deep-copies RNG
+  state); overridden by stochastic rules.
+- `@abstractmethod should_adapt(...)`.
 
-    rect rgb(255, 248, 240)
-        Note over Sim: Phase 2: With adaptation
-        Sim->>Sim: _simulate_damage_history(floodproofing=True)
-        Sim->>LUT: interpolate_damage_matrix('no_measures')
-        Sim->>LUT: interpolate_damage_matrix('floodproof_all_0')
-        LUT-->>Sim: damage_matrix_no_measures, damage_matrix_floodproofing_all
-        loop For each sequence
-            loop For each year
-                loop For each event
-                    Sim->>Sim: damage = where(floodproofed, fp_damage, no_measure_damage)
-                    Sim->>Sim: total_damage += damage
-                end
-                Sim->>Sim: Store damage_history[seq, hh, year]
-                Note over Sim: Adaptation decision:<br/>if total_damage / max_pot_dmg > 0.3<br/>→ floodproof
-                Sim->>Sim: Update is_floodproofed
-            end
-        end
-        Sim-->>Sim: damage_history, floodproofed
-    end
+### `ThresholdRule(DecisionRule)`
+Legacy reactive heuristic (the behaviour the coupling replaces): adapt when this
+year's realised damage exceeds `damage_threshold` (default `0.3`) of max potential
+damage. Deterministic; used as the bit-for-bit regression oracle.
 
-    Sim-->>User: damage_history, floodproofed, baseline_damage_history
+`ThresholdRule(config, damage_threshold=0.3)`.
+
+### `SEURule(DecisionRule)`
+The MVP science. Computes `EU_do_nothing` vs `EU_adapt` (CRRA utility over
+time-discounted NPVs, integrated over perceived flood probability) and adapts agents
+for whom adapting has higher subjective expected utility. Uses the ported kernels in
+`_core`.
+
+`SEURule(config, rng=None, amenity_value=None)` — pass an RNG for stochastic error
+terms (`error_interval > 0`); `clone()` forks the RNG for parallel sequences.
+
+```python
+from floodadapt_abm import SEURule, ThresholdRule, CouplingConfig
+cfg = CouplingConfig()
+seu = SEURule(cfg.decision, rng=None)
+legacy = ThresholdRule(cfg.decision, damage_threshold=0.3)
 ```
 
 ---
 
-## 7. File Reference
+## 6. Stochastic events — `event_utils.py`
 
-| File | Purpose |
-|------|---------|
-| `setup_lookup_table.py` | Functions to create, run, and read FloodAdapt scenario combinations into a lookup table |
-| `abm_simulator.py` | `ABMSimulator` class: Monte Carlo event sequences, damage interpolation, simulation loop, plotting |
-| `1_create_lookup_table.ipynb` | Notebook: user-facing interface to create the lookup table for a case study |
-| `2_simulate_adaptation.ipynb` | Notebook: user-facing interface to run Monte Carlo simulations with `ABMSimulator` |
-| `environment.yml` | Conda environment specification |
+The **single** stochastic event generator (consolidated out of the example scripts in
+Phase 2).
 
----
+- `draw_year_events(event_names, event_freqs, rng, max_events_per_year=None, dt=1.0)`
+  — draw the events occurring in one year. Each event is an independent Bernoulli
+  trial with `p = 1 - exp(-freq·dt)`. When the draw exceeds the cap, events are
+  selected **at random without replacement** from the drawn pool (preserves the
+  Monte-Carlo distribution — the agreed policy that supersedes the old
+  highest-frequency / highest-magnitude heuristics).
+- `generate_event_sequences(event_names, event_freqs, n_seq, n_years, rng,
+  max_events_per_year=None, dt=1.0)` — `n_seq` independent per-year event sequences.
 
-## 8. How to Use
-
-1. **Install environment**: `conda env create -f environment.yml`
-2. **Create lookup table**: Run `1_create_lookup_table.ipynb`
-   - Configure paths, event set, SLR range, floodproof height
-   - Produces a NetCDF file with the lookup table
-3. **Run simulation**: Run `2_simulate_adaptation.ipynb`
-   - Load the lookup table NetCDF
-   - Set Monte Carlo parameters (sequences, seed, threshold)
-   - Uses `ABMSimulator` class from `abm_simulator.py`
-   - Uses FloodAdapt only to retrieve SLR projections for the case study
+```python
+import numpy as np
+from floodadapt_abm import draw_year_events
+rng = np.random.default_rng(42)
+occurred = draw_year_events(["e0", "e1", "e2"], np.array([0.1, 0.02, 0.2]),
+                            rng, max_events_per_year=4)
+```
 
 ---
 
-*Document generated 2026-06-04. Source: FloodAdapt-ABM repository at `C:\repos\FloodAdapt-ABM`.*
+## 7. Simulation engine — `simulation_engine.py`
+
+### `SimulationEngine`
+The recommended entry point; owns time, data, event generation, the lifespan reset and
+a pluggable `DecisionRule`. Wraps a `DynamoDecisionBridge` for the damage plumbing.
+
+`SimulationEngine(ds, decision_rule=None, config=None, income_per_agent=None,
+amenity_value_per_agent=None, damage_dtype=np.float32)`.
+
+| Method | Purpose |
+|---|---|
+| `draw_year_events(rng, dt=1.0)` | unified per-year event draw (delegates to `event_utils`) |
+| `prepare_damages(slr_value, interp_method='linear')` | interpolate per-event damage catalogues at an SLR level (memoised per SLR/method) |
+| `update_flood_experience(flooded_agents)` | update `flood_timer` + `risk_perception` |
+| `step(year_index, slr_value, rng, interp_method='linear')` | advance one year for the live `self.state` (**the authoritative kernel**) |
+| `reset_state()` | reset per-agent state for a fresh sequence (bumps `state_epoch`) |
+| `run(slr_values, no_seq=1, seed=None, interp_method='linear', track_eu=False, n_jobs=1)` | run `no_seq` Monte-Carlo sequences; `n_jobs>1` parallelises across a thread pool of engine clones sharing a pre-warmed read-only cache |
+| `is_residential` (property) | boolean mask (all `True` — engine already operates on residential agents) |
+
+**Performance contract (committed, bit-identical):**
+- *Per-SLR interpolation cache* — each strategy cube is materialised once and
+  `prepare_damages` is memoised per `(SLR, method)`; cuts per-tick interpolation
+  ~5.5 s → ~1 s (first materialize ~24 s → ~3.6 s).
+- *Parallel Monte-Carlo sequences* — `run(n_jobs=N)` runs per-worker clones over a
+  thread pool sharing a pre-warmed cache; `n_jobs=1` unchanged, parallel ≈ 1.4×,
+  bit-for-bit. Internals: `_prewarm_interp_cache`, `_clone_for_worker`,
+  `_simulate_one_sequence`.
+
+```python
+result = engine.run([0.0, 0.1, 0.2, 0.3], no_seq=200, seed=7, n_jobs=4, track_eu=True)
+```
+
+---
+
+## 8. Live parity rule — `dynamo_live_rule.py` (Phase 4a)
+
+A `DecisionRule` that delegates the decision math to the **native** DYNAMO-M
+`DecisionModule` — the live parity oracle proving the ported `SEURule` matches upstream
+(worst EU abs 1.9e-6, rel 4.8e-7).
+
+- `DYNAMO_M_AVAILABLE: bool` — module-level flag (lightweight probe, no heavy import).
+- `DynamoMNotAvailable(ImportError)` — raised on construction when DYNAMO-M is absent.
+- `resolve_dynamo_path(dynamo_path=None)` / `load_native_decision_module(dynamo_path=None)`
+  — resolve + import the native module (honours the `DYNAMO_M_PATH` env var).
+- `DynamoLiveRule(config, dynamo_path=None, amenity_value=None, rng=None,
+  geom_id='floodadapt_abm')` — builds the minimal stub object graph the native
+  `DecisionModule` needs and forwards `should_adapt` to it.
+
+Guarded: the package imports fine without DYNAMO-M; only *constructing* the rule
+requires it. Set `DYNAMO_M_PATH` (e.g. `c:\repos\DYNAMO-M\DYNAMO-M`) to enable.
+
+---
+
+## 9. Mesa-native scaffold — `mesa_native.py` (Phase 4b)
+
+A **framework-free** mirror of DYNAMO-M's `SLRModel.step()` tick loop that inverts
+*who owns time*: instead of `engine.run` looping years, a small model advances one tick
+at a time — while still delegating all numerics to `engine.step`.
+
+- `CoastalNodePopulation(model)` — vectorised household group; `state`/`n` properties;
+  `step()` advances one year.
+- `Agents(model)` — steps each agent group per tick (exported as `MesaAgents`).
+- `FloodAdaptSLRModel(engine, slr_values, seed, interp_method='linear',
+  track_eu=False)` — the framework-free model that owns time. Uses the PRE.3
+  `state_epoch` staleness guard (`_check_not_stale`) so a shared engine can't be
+  silently invalidated. `step()` / `run_model()` mirror `SLRModel`.
+- `run_mesa_native(engine, slr_values, no_seq=1, seed=None, interp_method='linear',
+  track_eu=False)` — drop-in analogue of `engine.run`; **bit-for-bit identical**.
+
+---
+
+## 10. Native-class integration — `mesa_native_full.py` (Phase 4b-full)
+
+The **final integration step**: binds the **real honeybees `Model`** as the
+time-owning base class (as the upstream `SLRModel` does) and routes decisions through
+the native DYNAMO-M `DecisionModule` (via `DynamoLiveRule`), feeding a deterministic
+coastal-node population entirely from the FloodAdapt lookup table through the PRE.4
+adapter. Every numeric per-year operation is still delegated to `SimulationEngine.step`
+with the identical RNG stream, so the whole path stays **bit-for-bit** identical to the
+4b scaffold and `engine.run`.
+
+- `HONEYBEES_AVAILABLE: bool` / `HoneybeesNotAvailable(ImportError)` — guarded import;
+  the package imports without honeybees, and only *construction* raises.
+- `CoastalNodePopulationFull(model)` — native-class analogue of the 4b population;
+  per-tick `step()` = `adapter.populate(slr)` (forward) → `engine.step(...)`
+  (authoritative) → set `node.adapt/time_adapt` → `adapter.write_back(node)` (reverse).
+- `AgentsFull(model)` — mirror of DYNAMO-M's `Agents`.
+- `FloodAdaptSLRModelFull(engine, slr_values, seed, interp_method='linear',
+  track_eu=False, start_year=2020)` — subclasses the real `honeybees.model.Model`; the
+  clock (`current_time`/`current_timestep`/`end_time`) is owned by honeybees.
+  `timestep` is a 0-based property alias of `current_timestep`. Reuses the PRE.3
+  staleness guard.
+- `run_mesa_native_full(engine, slr_values, no_seq=1, seed=None,
+  interp_method='linear', track_eu=False, start_year=2020)` — drop-in analogue of
+  `run_mesa_native` / `engine.run`; same return schema.
+
+**Gate (delivered):** `run_mesa_native_full == run_mesa_native == engine.run`
+element-wise across seeds/sequences for `SEURule` and `ThresholdRule`; native-vs-ported
+EU parity (EU_adapt max |abs| ≈ 2.9e-6); executed on the real ~58k-household Charleston
+table. See `examples_engine/07_mesa_native_full.py` and
+`verification/mesa_native_full/`.
+
+**Scope note:** GLOFRIS, gravity CWD, `spin_up_flag`, low-memory `.npz` paging and the
+native reporter are out of MVP scope — native `CoastalNode.step()` is too entangled
+with that data ecosystem to drive on a dependency-free population, so 4b-full reuses the
+validated engine kernel for the per-tick physics and the native `DecisionModule` for
+the decision math inside a real honeybees `Model`.
+
+```python
+import os, xarray as xr
+os.environ["DYNAMO_M_PATH"] = r"c:\repos\DYNAMO-M\DYNAMO-M"
+from floodadapt_abm import SimulationEngine, SEURule, CouplingConfig, run_mesa_native_full
+
+ds = xr.open_dataset("lookup_table_charleston_beta_release_ABM_probabilistic_set.nc")
+cfg = CouplingConfig()
+engine = SimulationEngine(ds, decision_rule=SEURule(cfg.decision), config=cfg)
+result = run_mesa_native_full(engine, [0.0, 0.1, 0.2, 0.3], no_seq=10, seed=42)
+```
+
+---
+
+## 11. Lookup-table adapter — `coastal_node_adapter.py`
+
+Maps between a `SimulationEngine` (the FloodAdapt lookup-table world) and the native
+DYNAMO-M `CoastalNode` array layout — the one genuinely new modelling artefact for
+4b-full (prototyped as PRE.4, now driven every tick).
+
+- `CoastalNodeArrays` (dataclass) — dependency-free mirror of the native node array
+  set: `property_value`, events-first `damages_coastal_cells`, `p_floods`, `adapt`,
+  `time_adapt`, `_flood_plain` geom_id.
+- `LookupTableAdapter(engine, geom_id='floodadapt_flood_plain')`
+  - `populate(slr_value, interp_method='linear')` — **forward**: build node arrays from
+    the lookup table at `slr_value` (read-only, no RNG).
+  - `write_back(node)` — **reverse**: route the node's adaptation state back into the
+    engine's live `AgentState`, with `object_id` alignment guards (idempotent).
+- `round_trip_check(engine, slr_value, interp_method='linear')` — executable bit-parity
+  contract (the PRE.4 gate): proves routing state through the node is a simulation
+  no-op.
+
+---
+
+## 12. Ported kernels — `_core/`
+
+Import-free numerical layer (only NumPy/SciPy/xarray). DYNAMO-M's Python source is
+**not** imported at runtime for the ported MVP path.
+
+### `_core/dynamo_decision_bridge.py`
+`DynamoDecisionBridge` couples the xarray lookup table with the ported SEU model.
+
+`DynamoDecisionBridge(ds, config=None, income_per_agent=None,
+amenity_value_per_agent=None)`. Key methods:
+
+| Method | Purpose |
+|---|---|
+| `prepare_damage_arrays(slr_value, interp_method='linear')` | interpolate per-event damage arrays at an SLR level (memoised — the per-SLR cache) |
+| `clear_interp_cache()` | drop all memoised interpolation state |
+| `compute_expected_annual_damages(use_adapted_strategy=False)` | EAD per agent by integrating damage × frequency |
+| `update_flood_experience(flooded_agents)` | advance `flood_timer` + `risk_perception` |
+| `evaluate_decisions(year_index)` | apply the SEU model; return newly-adapting agents |
+| `get_current_damages(event_name)` | (capped) per-agent damage for one event |
+
+Module-level SEU maths (pure functions): `_iterate_through_flood` (time-discounted
+NPV per flood), `_integrate_expected_utility` (CRRA + integrate over perceived
+probability), `_calc_eu_do_nothing`, `_calc_eu_adapt`. Private init helpers set up
+economic/state arrays, the residential mask and the annualised adaptation cost.
+
+### `_core/lookup_utils.py`
+The SLR→damage interpolation kernel:
+
+- `materialize_strategy_cube(ds, strategy, res_mask=None, ...)` — build the
+  (residential) damage cube for one strategy **once**.
+- `interpolate_cube_at_slr(values, slr_arr, slr_target, method='linear',
+  max_pot_dmg=None)` — interpolate a pre-materialized cube along the SLR axis.
+- `interpolate_damage_at_slr(ds, strategy, slr_target, ...)` — single-shot convenience.
+- `interpolate_damage_matrix(ds, strategy, slr_values, event_names_list, ...)` — batch
+  over SLR values and an event subset.
+
+---
+
+## 13. Stage-1 pipeline — `setup_lookup_table.py`
+
+Builds the NetCDF damage cube by running FloodAdapt scenarios. **Requires the
+`flood-adapt` library** (hence not imported by `__init__.py`). Functions:
+
+| Function | Purpose |
+|---|---|
+| `create_lookup_table(fa, name_event_set, slr=np.arange(0,1.1,0.25), unit=UnitTypesLength.meters, fp_height=0.5)` | top-level: build + return the lookup Dataset |
+| `get_events_freq(fa, name_event_set)` | read event frequencies from the EventSet |
+| `create_combinations_matrix(fa, name_event_set, slr, unit, fp_height)` | enumerate projection/strategy/scenario combinations |
+| `save_combinations_to_database(fa, projections, strategies, scenarios, flood_proofs)` | register scenarios in FloodAdapt |
+| `run_scenarios(fa, scenarios, clean=True)` | run scenarios (optionally cleaning outputs) |
+| `read_impacts_dataset(fa, projections, strategies, events, slr, events_freq=None)` | assemble impacts into the cube (with `object_id`-indexed accessor + alignment assertion) |
+| `_cleanup_scenario_outputs(...)` | delete intermediate scenario outputs |
+
+The `EventSet` must be **return-period based** for the frequencies to be meaningful.
+
+---
+
+## 14. Legacy simulator — `abm_simulator.py`
+
+`ABMSimulator` — the **deprecated** stage-2 threshold-rule simulator, retained for
+backward compatibility and the Gate-1 bit-for-bit regression against
+`SimulationEngine` + `ThresholdRule`. New code should not use it.
+
+`ABMSimulator(ds_impacts, times, slr_values, no_seq, damage_threshold=0.3, seed=42,
+dmg_unit='$', slr_unit='feet', damage_dtype=np.int32)`. Notable methods:
+`run_simulation`, `generate_event_sequences`, `interpolate_damage_matrix`,
+`slr_damage_lookup`, and plotting helpers (`plot_event_damage_timeseries`,
+`plot_total_damage_statistics`).
+
+---
+
+## 15. Examples, tests & verification
+
+```
+examples_engine/         numbered runnable learning path (01 … 07) + README
+  01_...                  engine basics
+  ...
+  06_mesa_native_driving.py    Phase 4b scaffold demo
+  07_mesa_native_full.py       Phase 4b-full native-class demo (+ inline bit-parity)
+tests/                   full pytest suite (147 tests; self-contained mock datasets)
+  test_mesa_native_full.py     22 tests: triple bit-parity, honeybees clock,
+                               object graph/adapter, staleness guard, native path
+verification/            vendored, portable batteries emitting md/JSON/figures
+  phase1_seu_battery/          V1–V6 SEU validation
+  phase4a_parity/              ported vs native EU parity
+  phase4b_mesa_native/         4b bit-parity gate
+  mesa_native_full/            4b-full G1–G4 battery (gate_pass: True on real table)
+  real_table_gate/             PRE.2 full Charleston run
+  preflight_4b_full/           import/instantiate checks
+```
+
+Run everything (set `DYNAMO_M_PATH` to enable the native-parity tests):
+
+```powershell
+$env:DYNAMO_M_PATH = "c:\repos\DYNAMO-M\DYNAMO-M"
+pytest -q            # 147 passed
+```
+
+Guarded tests skip cleanly when honeybees or DYNAMO-M is unavailable.
+
+---
+
+## 16. Global assumptions & invariants
+
+- **Residential-only MVP:** only buildings whose `primary_object_type` contains `RES`
+  are simulated (substring match, case-sensitive).
+- **Two strategies:** `no_measures` (baseline) and `floodproof_all_0` (dry-floodproof).
+- **RP-based EventSet:** frequencies come from a return-period EventSet; Bernoulli
+  per-event occurrence with `p = 1 - exp(-freq·dt)`.
+- **Event cap policy:** at most `max_events_per_year`; surplus events chosen **at
+  random without replacement** from the drawn pool.
+- **Irreversible within-year adaptation:** an agent adapts at most once; adaptations
+  age via `time_adapted` and **expire at `lifespan_dryproof`** (default 75 y), after
+  which the agent un-adapts and re-decides.
+- **Bit-parity is the contract:** all three time drivers share the `engine.step` kernel
+  and RNG stream; any divergence between them is a bug.
+- **Optional deps are guarded:** DYNAMO-M (`DynamoLiveRule`, native parity) and
+  honeybees (`mesa_native_full`) are imported defensively — the package and the FA-ABM
+  suite never hard-fail when they are absent.
+- **Determinism:** given a seed, results are reproducible; `n_jobs>1` is bit-identical
+  to `n_jobs=1` for deterministic rules.
+
+---
+
+*Reference for the `floodadapt_abm` package. For design rationale, the SEU
+mathematics, diagrams and the phase history, see
+[`docs/architecture.md`](docs/architecture.md). Revised 2026-07-09; reflects the
+delivered Phase 4b-full and the 147-test suite.*
