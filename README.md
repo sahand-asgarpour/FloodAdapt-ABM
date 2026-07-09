@@ -76,7 +76,7 @@ FloodAdapt-ABM/
 
 The `.nc` lookup table is the **only** interface between the stages — keep it stable.
 
-## Performance & parallelization
+## Performance & parallelisation
 
 Two bit-identical engine speedups (landed while closing the real-table gate, commit `6f45d6f`):
 
