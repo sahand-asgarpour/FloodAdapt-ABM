@@ -64,15 +64,15 @@ FloodAdapt-ABM/
 ├── docs/                               # design record (architecture, phase docs, AGENTS.md)
 ├── 1_create_lookup_table.ipynb         # stage 1: build the lookup table (SFINCS+FIAT)
 ├── 2_simulate_adaptation.ipynb         # stage 2 (legacy ABMSimulator path)
-├── 3_simulate_adaptation_engine.ipynb  # stage 2: ⭐ SimulationEngine + SEURule path
+├── 3_run_coupled_abm.ipynb             # stage 2: ⭐ Coupled ABM guide (SimulationEngine + SEURule)
 ├── pyproject.toml                      # package metadata & dependencies (primary)
-└── environment.yml                     # optional conda environment
+├── environment.yml                     # optional conda environment
 ```
 
 ## The two-stage pipeline
 
 1. **Build the lookup table** — [1_create_lookup_table.ipynb](1_create_lookup_table.ipynb) runs FloodAdapt (SFINCS + FIAT) over every `event × SLR × strategy` combination and saves `lookup_table_<site>_<event_set>.nc` (dims `object_id × slr × strategy × event`).
-2. **Simulate adaptation** — [3_simulate_adaptation_engine.ipynb](3_simulate_adaptation_engine.ipynb) (or the API above) draws Monte-Carlo event sequences, interpolates damages along the SLR axis, and applies the pluggable household decision rule each year.
+2. **Simulate adaptation** — [3_run_coupled_abm.ipynb](3_run_coupled_abm.ipynb) (or the API above) draws Monte-Carlo event sequences, interpolates damages along the SLR axis, and applies the pluggable household decision rule each year.
 
 The `.nc` lookup table is the **only** interface between the stages — keep it stable.
 
