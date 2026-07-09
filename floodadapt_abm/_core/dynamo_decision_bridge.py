@@ -659,8 +659,11 @@ def _integrate_expected_utility(
 
     # Integrate EU over perceived probability (trapezoidal rule)
     # np.trapezoid is the preferred name in numpy >= 2.0; fall back to
-    # the deprecated np.trapz alias for older environments.
-    _trapz = getattr(np, "trapezoid", np.trapz)
+    # the deprecated np.trapz alias for older environments. Use hasattr so
+    # np.trapz is never *accessed* on numpy >= 2.0 (where it was removed and
+    # accessing it raises AttributeError — a plain getattr default would still
+    # evaluate np.trapz eagerly and crash).
+    _trapz = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
     eu_array: np.ndarray = _trapz(y=EU_store, x=p_all, axis=0).astype(
         np.float32
     )
