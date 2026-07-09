@@ -7,3 +7,6 @@ __pycache__/
 .ipynb_checkpoints/
 .idea/
 .vscode/
+
+# Local verification bundles (present for gates, not tracked)
+verification/
