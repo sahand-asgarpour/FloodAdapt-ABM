@@ -8,3 +8,6 @@ dependencies:
   - ipykernel
   - pip:
       - -e .[dev,pipeline]
+      # Optional DYNAMO-M native framework for Phase 4b-full / PRE.1 (see pyproject 'dynamo' extra):
+      # - mesa
+      # - honeybees

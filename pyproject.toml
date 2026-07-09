@@ -20,6 +20,10 @@ dependencies = [
 [project.optional-dependencies]
 # Full lookup-table generation pipeline (stage 1) requires flood-adapt
 pipeline = ["flood-adapt==1.1.3"]
+# DYNAMO-M native ABM framework (Phase 4b-full + PRE.1). Not needed by the MVP,
+# which runs via the dependency-free mesa_native mirror. Pin exact versions once
+# PRE.1 (verification/preflight_4b_full/step1_import_test.py) records them.
+dynamo = ["mesa==3.3.1", "honeybees==1.2.0"]
 dev = ["pytest", "pytest-cov", "ipykernel", "jupyterlab"]
 
 [tool.setuptools]
