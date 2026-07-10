@@ -98,7 +98,7 @@ results = engine.run(np.linspace(0, 1.5, 30), no_seq=100, seed=42, n_jobs=-1)  #
 
 ## Installation
 
-Requires Python 3.10+.
+Requires Python 3.10, 3.11, or 3.12 (Python 3.13+ is not currently supported).
 
 ```bash
 python -m venv venv
@@ -110,7 +110,6 @@ pip install -e .[pipeline]       # + flood-adapt (stage-1 lookup-table builds)
 pip install -e .[dynamo]         # + mesa/honeybees (native DYNAMO-M / Phase-4b-full; optional)
 ```
 
-(`environment.yml` is an optional conda alternative; `pyproject.toml` is the single source of truth for dependencies.)
 
 ## Examples
 
