@@ -113,7 +113,7 @@ pip install -e .[dynamo]         # + mesa/honeybees (native DYNAMO-M / Phase-4b-
 
 ## Examples
 
-The canonical learning path is [examples_engine/](examples_engine/) — six numbered scripts from a minimal run (01) through custom rules (03), Monte-Carlo uncertainty (04), the Phase-4a live-DYNAMO-M parity oracle (05), and Phase-4b Mesa-native driving (06). All run on a synthetic dataset by default; set `FA_ABM_REAL_TABLE=1` to opt into the real Charleston table.
+The learning path is [examples_engine/](examples_engine/) — six numbered scripts from a minimal run (01) through custom rules (03), Monte-Carlo uncertainty (04), the Phase-4a live-DYNAMO-M parity oracle (05), and Phase-4b Mesa-native driving (06). All run on a synthetic dataset by default; set `FA_ABM_REAL_TABLE=1` to opt into the real Charleston table.
 
 ## Tests & verification
 
@@ -126,6 +126,6 @@ Phase-gate evidence (reports, metrics, re-runnable harnesses) lives in [verifica
 ## Documentation
 
 - [examples_engine/README.md](examples_engine/README.md) — architecture & usage walkthrough
-- [docs/architecture.md](docs/architecture.md) — the canonical design record detailing the coupling architecture, the SEU mathematical formulation, and the phase-gate history
+- [docs/architecture.md](docs/architecture.md) — the design record detailing the coupling architecture, the SEU mathematical formulation, and the phase-gate history
 - [floodadapt_abm_documentation.md](floodadapt_abm_documentation.md) — the comprehensive API reference covering every module, class, and configuration dataclass
-- [docs/AGENTS.md](docs/AGENTS.md) — deep operational guide (data requirements, schema, gotchas, phase history)
+
