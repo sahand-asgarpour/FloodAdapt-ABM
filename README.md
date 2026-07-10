@@ -1,33 +1,24 @@
 # FloodAdapt-ABM
 
 FloodAdapt-ABM is a lightweight agent-based simulator that processes a precomputed [FloodAdapt](https://pypi.org/project/flood-adapt/) impact lookup table to generate Monte-Carlo time series of building-level damages and household floodproofing decisions under sea-level rise. Household behaviour is pluggable: a simple damage-threshold rule, the ported **DYNAMO-M** Subjective Expected Utility (SEU) framework (the validated default), or the *live* native DYNAMO-M decision module.
-
-**Status:** Phases 0–4b (scaffold) complete and gated — 125/125 tests, bit-parity gates PASS; the 4b-pre de-risking phase (PRE.1–4, HYG.1–4, VER.1–2) is complete and pushed, and PRE.2 has been executed on the real 61,858 × 207 Charleston table (`gate_pass: True`). See [docs/20260709_proposed_development_architecture_steps.md](docs/20260709_proposed_development_architecture_steps.md) for the roadmap and [verification/](verification/) for the executable gate evidence.
-
 ---
 
-## Quick start
+## Installation
 
-```python
-from floodadapt_abm import SimulationEngine, CouplingConfig
-import xarray as xr, numpy as np
+Requires Python 3.10+. 
 
-ds = xr.open_dataset("lookup_table.nc")                     # stage-1 output
-engine = SimulationEngine(ds=ds, config=CouplingConfig())   # SEURule by default
-results = engine.run(np.linspace(0, 1.5, 30), no_seq=10, seed=42)
-
-results["damage_history"]      # (no_seq, n_agents, n_years)
-results["adapted_history"]     # (no_seq, n_agents, n_years) bool
-results["adoption_fraction"]   # (no_seq, n_years)
-```
-
-No lookup table yet? The numbered examples run out-of-the-box on a synthetic one:
+> [!NOTE]
+> The `[pipeline]` extra (which installs `flood-adapt` to build new lookup tables from scratch) currently requires Python < 3.13. If you are on Python 3.13+ and already have a precomputed lookup table, you can skip installing `[pipeline]` and simply install the core/dev/dynamo packages to run the simulation.
 
 ```bash
-cd examples_engine
-python 01_quickstart.py
-```
+python -m venv venv
+venv\Scripts\Activate.ps1        # Windows PowerShell (or: source venv/bin/activate)
 
+pip install -e .                 # core
+pip install -e .[dev]            # + pytest (run the test suite)
+pip install -e .[pipeline]       # + flood-adapt (stage-1 lookup-table builds)
+pip install -e .[dynamo]         # + mesa/honeybees (native DYNAMO-M / Phase-4b-full; optional)
+```
 ---
 
 ## Repository structure
@@ -68,6 +59,31 @@ FloodAdapt-ABM/
 ├── pyproject.toml                      # package metadata & dependencies (primary)
 ├── environment.yml                     # optional conda environment
 ```
+---
+
+## Quick start
+
+```python
+from floodadapt_abm import SimulationEngine, CouplingConfig
+import xarray as xr, numpy as np
+
+ds = xr.open_dataset("lookup_table.nc")                     # stage-1 output
+engine = SimulationEngine(ds=ds, config=CouplingConfig())   # SEURule by default
+results = engine.run(np.linspace(0, 1.5, 30), no_seq=10, seed=42)
+
+results["damage_history"]      # (no_seq, n_agents, n_years)
+results["adapted_history"]     # (no_seq, n_agents, n_years) bool
+results["adoption_fraction"]   # (no_seq, n_years)
+```
+
+No lookup table yet? The numbered examples run out-of-the-box on a synthetic one:
+
+```bash
+cd examples_engine
+python 01_quickstart.py
+```
+
+---
 
 ## The two-stage pipeline
 
@@ -95,24 +111,6 @@ results = engine.run(np.linspace(0, 1.5, 30), no_seq=100, seed=42, n_jobs=-1)  #
 | `ThresholdRule` | Legacy ex-post rule: adapt when `damage/max_pot_dmg > 0.3` | Backward compat; reproduces `ABMSimulator` bit-for-bit |
 | `DynamoLiveRule` | Calls the **native** DYNAMO-M `DecisionModule` (optional, guarded import via `DYNAMO_M_PATH`) | Parity oracle — proves the port hasn't drifted |
 | your own | Subclass `DecisionRule`, implement `should_adapt(...)` | See `examples_engine/03_custom_rule.py` |
-
-## Installation
-
-Requires Python 3.10+. 
-
-> [!NOTE]
-> The `[pipeline]` extra (which installs `flood-adapt` to build new lookup tables from scratch) currently requires Python < 3.13. If you are on Python 3.13+ and already have a precomputed lookup table, you can skip installing `[pipeline]` and simply install the core/dev/dynamo packages to run the simulation.
-
-```bash
-python -m venv venv
-venv\Scripts\Activate.ps1        # Windows PowerShell (or: source venv/bin/activate)
-
-pip install -e .                 # core
-pip install -e .[dev]            # + pytest (run the test suite)
-pip install -e .[pipeline]       # + flood-adapt (stage-1 lookup-table builds)
-pip install -e .[dynamo]         # + mesa/honeybees (native DYNAMO-M / Phase-4b-full; optional)
-```
-
 
 ## Examples
 
