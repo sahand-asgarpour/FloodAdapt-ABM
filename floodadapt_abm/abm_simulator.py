@@ -11,7 +11,7 @@ abm_simulator.py
     It is intentionally **kept importable** (not moved into ``_core/``) because it
     is still a public/legacy API actively referenced by:
 
-    * ``2_simulate_adaptation.ipynb`` (the legacy stage-2 notebook), and
+    * ``notebooks/archive/2_simulate_adaptation.ipynb`` (the legacy stage-2 notebook), and
     * the Gate-1 regression test, which asserts that ``ThresholdRule`` reproduces
       this class's damage/adaptation formula bit-for-bit.
 

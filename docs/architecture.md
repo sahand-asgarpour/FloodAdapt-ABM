@@ -303,7 +303,7 @@ unaffected (`run_mesa_native` constructs models sequentially). +4 tests.
 | Real-table gate (PRE.2) | **Done / PASS** | `gate_pass: True` on the real 61,858 × 207 table (Sec.9). |
 | CI | **Present, green** | `.github/workflows/ci.yml`: matrix pytest + examples + vendored 4b gate. |
 | Test suite | **147 passing** | bridge, engine, rules, agent state, event utils, live-parity, mesa-native, mesa-native-full, perf. |
-| Notebook 2 (`2_simulate_adaptation.ipynb`) | Legacy path | Still uses `ABMSimulator`; the engine path is notebook `3_run_coupled_abm.ipynb`. |
+| Notebook 2 (`notebooks/archive/2_simulate_adaptation.ipynb`) | Legacy path | Still uses `ABMSimulator`; the engine path is notebook `notebooks/2_run_coupled_abm.ipynb`. |
 
 ## 9. Engine performance & the real-table gate (PRE.2)
 
@@ -1695,14 +1695,14 @@ This economic growth provides a realistic wealth recovery mechanism that allows 
 | File | Change |
 |------|--------|
 | `abm_simulator.py` | Own/accept a bridge; pass full damage matrices; replace threshold block; add `eu_history`; derive `is_residential` |
-| `2_simulate_adaptation.ipynb` | Construct the bridge via `DynamoDecisionBridge(ds=ds, config=CouplingConfig(...))` and wire into `ABMSimulator` |
+| `notebooks/archive/2_simulate_adaptation.ipynb` | Construct the bridge via `DynamoDecisionBridge(ds=ds, config=CouplingConfig(...))` and wire into `ABMSimulator` |
 | `environment.yml` | Ensure `scipy` pinned (currently transitive via `flood-adapt`); `numba` only if `@njit` version desired |
 
 ### Unchanged files
 | File | Reason |
 |------|--------|
 | `setup_lookup_table.py` | Lookup-table creation independent of decision logic — **but** the chosen `EventSet` must satisfy Sec.1.3 (RP set) |
-| `1_create_lookup_table.ipynb` | No code change; ensure RP-based `EventSet` |
+| `notebooks/1_create_lookup_table.ipynb` | No code change; ensure RP-based `EventSet` |
 
 ---
 
@@ -1794,7 +1794,7 @@ engine state. **Implement persistent `time_adapted` tracking and the lifespan-dr
 `lifespan_dryproof` to `DecisionConfig`, increment `time_adapted` yearly for adapted agents, and
 in `should_adapt` compute `reset_mask = time_adapted >= lifespan_dryproof` to un-adapt and
 re-decide. **Gate (hard stop):** re-run the full Sec.12.1 V1–V6 battery on the new engine — all must
-pass (no science regression) — and confirm `2_simulate_adaptation.ipynb` runs unchanged.
+pass (no science regression) — and confirm `notebooks/archive/2_simulate_adaptation.ipynb` runs unchanged.
 
 **Risk gates summary.** Both phase boundaries are **hard stops**: if the Phase-2 `ThresholdRule`
 regression or the Phase-3 Sec.12.1 battery fails, halt and debug within that phase before proceeding.

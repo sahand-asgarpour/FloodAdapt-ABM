@@ -46,16 +46,10 @@ FloodAdapt-ABM/
 │   ├── README.md                       # usage guide & architecture
 │   └── old_bridge_examples/            # DEPRECATED pre-refactor demos (reference only)
 ├── tests/                              # pytest suite (incl. all parity gates)
-├── verification/                       # vendored, executable gate evidence per phase
-│   ├── phase1_seu_battery/             #   V1–V6 SEU validation battery
-│   ├── phase4a_parity/                 #   ported SEU vs native DYNAMO-M
-│   ├── phase4b_mesa_native/            #   tick driver vs engine loop (bit-parity)
-│   ├── preflight_4b_full/              #   PRE.1: honeybees/mesa pinning kit
-│   └── real_table_gate/                #   PRE.2: gates on the real Charleston table
 ├── docs/                               # design record (architecture, phase docs)
-├── 1_create_lookup_table.ipynb         # stage 1: build the lookup table (SFINCS+FIAT)
-├── 2_simulate_adaptation.ipynb         # stage 2 (legacy ABMSimulator path)
-├── 3_run_coupled_abm.ipynb             # stage 2: ⭐ Coupled ABM guide (SimulationEngine + SEURule)
+├── notebooks/                          # top-level pipelines
+│   ├── 1_create_lookup_table.ipynb     # stage 1: build the lookup table (SFINCS+FIAT)
+│   └── 2_run_coupled_abm.ipynb         # stage 2: ⭐ Coupled ABM guide (SimulationEngine + SEURule)
 └── pyproject.toml                      # package metadata & dependencies (primary)
 ```
 ---
@@ -86,8 +80,8 @@ python 01_quickstart.py
 
 ## The two-stage pipeline
 
-1. **Build the lookup table** — [1_create_lookup_table.ipynb](1_create_lookup_table.ipynb) runs FloodAdapt (SFINCS + FIAT) over every `event × SLR × strategy` combination and saves `lookup_table_<site>_<event_set>.nc` (dims `object_id × slr × strategy × event`).
-2. **Simulate adaptation** — [3_run_coupled_abm.ipynb](3_run_coupled_abm.ipynb) (or the API above) draws Monte-Carlo event sequences, interpolates damages along the SLR axis, and applies the pluggable household decision rule each year.
+1. **Build the lookup table** — [notebooks/1_create_lookup_table.ipynb](notebooks/1_create_lookup_table.ipynb) runs FloodAdapt (SFINCS + FIAT) over every `event × SLR × strategy` combination and saves `lookup_table_<site>_<event_set>.nc` (dims `object_id × slr × strategy × event`).
+2. **Simulate adaptation** — [notebooks/2_run_coupled_abm.ipynb](notebooks/2_run_coupled_abm.ipynb) (or the API above) draws Monte-Carlo event sequences, interpolates damages along the SLR axis, and applies the pluggable household decision rule each year.
 
 The `.nc` lookup table is the **only** interface between the stages — keep it stable.
 

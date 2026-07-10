@@ -17,7 +17,7 @@ rules, a pytest suite and CI — see the README and the phase sections below.
 
 The pipeline has two stages, one per notebook:
 
-1. **Build the lookup table** — `1_create_lookup_table.ipynb` →
+1. **Build the lookup table** — `notebooks/1_create_lookup_table.ipynb` →
    `setup_lookup_table.py::create_lookup_table`. For a given FloodAdapt site
    database and event set it:
    - enumerates the cartesian product of `events × SLR projections × strategies`
@@ -31,7 +31,7 @@ The pipeline has two stages, one per notebook:
      `ds.event.attrs["freq"]`; max potential damage (structure + content) and
      primary object types as `ds.object_id.attrs`.
    - The dataset is persisted to disk as `lookup_table_<site>_<event_set>.nc`.
-2. **Simulate adaptation over time** — `2_simulate_adaptation.ipynb` →
+2. **Simulate adaptation over time** — `notebooks/archive/2_simulate_adaptation.ipynb` →
    `abm_simulator.ABMSimulator`. Given the dataset plus a time vector and an
    SLR trajectory (typically `fa.interp_slr(slr_scenario=..., year=t)`), it
    draws `no_seq` Monte-Carlo event sequences, interpolates damages along the
@@ -386,7 +386,7 @@ jupyter lab
 Typical loop:
 
 1. Point `DATA_DIR`, `site`, and `name_event_set` in
-   `1_create_lookup_table.ipynb` at a FloodAdapt site database that contains
+   `notebooks/1_create_lookup_table.ipynb` at a FloodAdapt site database that contains
    the event set. The notebook copies `<site>` → `<site>_ABM_<event_set>` the
    first time so the original database is untouched.
 2. Run the notebook end-to-end. Expect long runtimes — SFINCS + FIAT execute
@@ -394,7 +394,7 @@ Typical loop:
    `finished` flag is set in `fa.get_scenarios()`.
 3. The notebook writes
    `lookup_table_<site>_ABM_<event_set>.nc` next to the notebooks.
-4. Open `2_simulate_adaptation.ipynb`, set the same `DATA_DIR`/`site` (needed
+4. Open `notebooks/archive/2_simulate_adaptation.ipynb`, set the same `DATA_DIR`/`site` (needed
    only for `fa.interp_slr`), point `xr.open_dataset(...)` at the `.nc` file,
    pick a `slr_scenario_name` that exists in the FloodAdapt database, then run
    `ABMSimulator(...).run_simulation()` followed by the plot methods.
@@ -877,7 +877,7 @@ criteria: [`docs/architecture.md`](architecture.md) Sec.11.1 / Sec.7; per-day or
   from the engine, and routes decisions back into `AgentState`.
 - **HYG.1–4** README rewrite, this AGENTS.md path cleanup + vendored
   `verification/`, CI (`.github/workflows/ci.yml`), engine-based notebook
-  (`3_run_coupled_abm.ipynb`) + Markdown design record in `docs/`.
+  (`notebooks/2_run_coupled_abm.ipynb`) + Markdown design record in `docs/`.
 - **VER.1 (open)** re-run the V1–V6 battery against `SimulationEngine` +
   `SEURule` (the vendored Phase-1 battery validated the original bridge path;
   its V5 "GAP" verdict predates the Phase-3 lifespan fix).
