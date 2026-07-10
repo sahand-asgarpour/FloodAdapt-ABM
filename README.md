@@ -98,7 +98,10 @@ results = engine.run(np.linspace(0, 1.5, 30), no_seq=100, seed=42, n_jobs=-1)  #
 
 ## Installation
 
-Requires Python 3.10, 3.11, or 3.12 (Python 3.13+ is not currently supported).
+Requires Python 3.10+. 
+
+> [!NOTE]
+> The `[pipeline]` extra (which installs `flood-adapt` to build new lookup tables from scratch) currently requires Python < 3.13. If you are on Python 3.13+ and already have a precomputed lookup table, you can skip installing `[pipeline]` and simply install the core/dev/dynamo packages to run the simulation.
 
 ```bash
 python -m venv venv

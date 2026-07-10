@@ -7,9 +7,9 @@ name = "floodadapt-abm"
 version = "0.1.0"
 description = "Agent-based flood adaptation simulation coupled with DYNAMO-M SEU decision framework."
 readme = "README.md"
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10"
 dependencies = [
-    "numpy",
+    "numpy<2.5",
     "xarray",
     "scipy",
     "pandas",
