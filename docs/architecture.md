@@ -62,7 +62,7 @@ lookup table).
 - **OUT (Phase 5+):** insurance (`calcEU_insure`), migration + gravity model, government/dike CBA agent, population/GDP dynamics, variable floodproof height.
 - **BYPASSED by design:** DYNAMO-M's internal hazard physics (`interpolate_water_levels`, dike overtopping, GLOFRIS scaling). All flood depths and damages come from the SFINCS/FIAT lookup table.
 
-**Hard requirement (`coupling_architecture.md` §1.3):** for the SEU exceedance
+**Hard requirement (`coupling_architecture.md` Sec.1.3):** for the SEU exceedance
 integral to be valid, the stage-1 EventSet should be a true return-period set
 (e.g. `[2,5,10,25,50,100,250,500,1000]` yr). If a non-RP set is used, a per-household
 damage-sorted exceedance curve must be derived first.
@@ -177,7 +177,7 @@ vision (DYNAMO-M consuming external flood damages).
 ## 5. SEU decision science (concise)
 
 The ported `SEURule` reproduces DYNAMO-M's household SEU. Full derivation and symbols
-are in **Part II** (below) §4; the essentials:
+are in **Part II** (below) Sec.4; the essentials:
 
 - **Expected utility of *do nothing*** (`calcEU_do_nothing`): integrate CRRA utility of
   the net-present-value wealth path over the perceived flood exceedance curve. Adapted
@@ -194,7 +194,7 @@ are in **Part II** (below) §4; the essentials:
   DYNAMO-M's multi-generational turnover (native source: `coastal_nodes.py:2221–2227`).
 - **`p_floods` contract:** both live methods `np.sort(p_floods)` ascending, cap perceived
   probability at 0.998, and integrate (`trapezoid`) over `[0,1]` — hence the RP-EventSet
-  requirement (§2) is mandatory for the SEU/live rules.
+  requirement (Sec.2) is mandatory for the SEU/live rules.
 
 ## 6. Decision rules & phase model-documentation
 
@@ -232,7 +232,7 @@ different driver. **Gate PASS:** `run_mesa_native == engine.run` bit-for-bit acr
 Phase 4b-full binds the **real honeybees `Model`** as the time-owning base class and
 routes each year's decision through the **native DYNAMO-M `DecisionModule`** — the
 documented final integration step. It is delivered as `mesa_native_full.py` and gated
-bit-for-bit (see §6.3.1 for the adapter it builds on).
+bit-for-bit (see Sec.6.3.1 for the adapter it builds on).
 
 - `FloodAdaptSLRModelFull(honeybees.model.Model)` — genuinely subclasses the real
   framework `Model`, so the clock (`current_time` / `current_timestep` / `end_time`) is
@@ -282,13 +282,13 @@ unaffected (`run_mesa_native` constructs models sequentially). +4 tests.
 | Phase | What was done | Gate |
 |---|---|---|
 | **0 — Stabilise** | Fixed the `cfg.environment.max_slr` demo crash; reconciled `DecisionConfig` docstring vs defaults; green examples. | Demos run; suite passes |
-| **1 — Validate SEU** | Ran the `coupling_architecture.md` §12.1 battery (degenerate risk perception → baseline; adoption vs 0.3-threshold; sensitivity sweeps; affordability → zero adoption; lifespan turnover). Cross-checked ported SEU vs native `calcEU_*`. | Battery passes; SEU == DYNAMO-M within tol (worst rel EU 4.2e-7) |
+| **1 — Validate SEU** | Ran the `coupling_architecture.md` Sec.12.1 battery (degenerate risk perception → baseline; adoption vs 0.3-threshold; sensitivity sweeps; affordability → zero adoption; lifespan turnover). Cross-checked ported SEU vs native `calcEU_*`. | Battery passes; SEU == DYNAMO-M within tol (worst rel EU 4.2e-7) |
 | **2 — Consolidate event & time** | Moved Bernoulli draw + cap into the core with **random** pool selection; native `run()`/`step()`; hardened `read_impacts_dataset` with an `object_id`-indexed accessor. | No decision logic in example scripts; ThresholdRule regression exact |
 | **3 — SimulationEngine + rules** | Built `SimulationEngine`, `AgentState`, `DecisionRule` ABC; ported `ThresholdRule`/`SEURule`; added `eu_history`, `is_residential`; **implemented `time_adapted` + `lifespan_dryproof=75` reset**. | ThresholdRule reproduces legacy output; battery re-passes |
-| **4a — Live parity** | `DynamoLiveRule` parity oracle (§6.1). | PASS (worst EU abs 1.9e-6, rel 4.8e-7) |
-| **4b — Mesa-native (scaffold)** | Time-ownership inversion via `FloodAdaptSLRModel.step()` (§6.2). | PASS (5/5 bit-for-bit) |
-| **4b-pre — De-risking & hygiene** | PRE.1 (pin mesa 3.3.1 / honeybees 1.2.0, import/instantiate DYNAMO-M) · PRE.2 (**real-table gate**, §9) · PRE.3 (staleness guard, §6.4) · PRE.4 (adapter prototype, §6.3.1) · HYG.1–4 (README rewrite, path purge + vendored `verification/`, **CI**, engine notebook + Markdown design docs) · VER.1–2 (battery re-run + figures). | All PRE/HYG/VER closed; **125 tests PASS**; CI green |
-| **4b-full — Native-class integration** | Bound the real honeybees `Model` (`mesa_native_full.py`) + native `DecisionModule`; population fed from the lookup table via the PRE.4 adapter; example 07 + full verification battery (§6.3). | **PASS** — triple bit-parity across seeds/sequences; real-table run; **+22 tests → 147 PASS** |
+| **4a — Live parity** | `DynamoLiveRule` parity oracle (Sec.6.1). | PASS (worst EU abs 1.9e-6, rel 4.8e-7) |
+| **4b — Mesa-native (scaffold)** | Time-ownership inversion via `FloodAdaptSLRModel.step()` (Sec.6.2). | PASS (5/5 bit-for-bit) |
+| **4b-pre — De-risking & hygiene** | PRE.1 (pin mesa 3.3.1 / honeybees 1.2.0, import/instantiate DYNAMO-M) · PRE.2 (**real-table gate**, Sec.9) · PRE.3 (staleness guard, Sec.6.4) · PRE.4 (adapter prototype, Sec.6.3.1) · HYG.1–4 (README rewrite, path purge + vendored `verification/`, **CI**, engine notebook + Markdown design docs) · VER.1–2 (battery re-run + figures). | All PRE/HYG/VER closed; **125 tests PASS**; CI green |
+| **4b-full — Native-class integration** | Bound the real honeybees `Model` (`mesa_native_full.py`) + native `DecisionModule`; population fed from the lookup table via the PRE.4 adapter; example 07 + full verification battery (Sec.6.3). | **PASS** — triple bit-parity across seeds/sequences; real-table run; **+22 tests → 147 PASS** |
 
 ## 8. Current state assessment (2026-07-09)
 
@@ -298,9 +298,9 @@ unaffected (`run_mesa_native` constructs models sequentially). +4 tests.
 | Unified `SimulationEngine` + `DecisionRule` (Phases 2+3) | **Done, gated** | `ThresholdRule` reproduces legacy output bit-for-bit; `SEURule` matches the Phase-1 battery; lifespan-dryproof reset implemented and unit-tested. |
 | Phase 4a — `DynamoLiveRule` parity oracle | **Done, gated** | Decisions identical across 5 configs; worst EU abs 1.9e-6, rel 4.8e-7. |
 | Phase 4b — Mesa-native driving (scaffold) | **Done, gated** | `run_mesa_native == engine.run` bit-for-bit; examples 01–07 run (exit 0). |
-| Phase 4b-full — native-class integration | **Done, gated** | `run_mesa_native_full == run_mesa_native == engine.run` bit-for-bit; real honeybees `Model` + native `DecisionModule`; real-table run (§6.3). |
-| Engine performance (interp cache + `n_jobs`) | **Done** | Full-scale bottleneck fixed; parallel sequences bit-identical (§9). |
-| Real-table gate (PRE.2) | **Done / PASS** | `gate_pass: True` on the real 61,858 × 207 table (§9). |
+| Phase 4b-full — native-class integration | **Done, gated** | `run_mesa_native_full == run_mesa_native == engine.run` bit-for-bit; real honeybees `Model` + native `DecisionModule`; real-table run (Sec.6.3). |
+| Engine performance (interp cache + `n_jobs`) | **Done** | Full-scale bottleneck fixed; parallel sequences bit-identical (Sec.9). |
+| Real-table gate (PRE.2) | **Done / PASS** | `gate_pass: True` on the real 61,858 × 207 table (Sec.9). |
 | CI | **Present, green** | `.github/workflows/ci.yml`: matrix pytest + examples + vendored 4b gate. |
 | Test suite | **147 passing** | bridge, engine, rules, agent state, event utils, live-parity, mesa-native, mesa-native-full, perf. |
 | Notebook 2 (`2_simulate_adaptation.ipynb`) | Legacy path | Still uses `ABMSimulator`; the engine path is notebook `3_simulate_adaptation_engine.ipynb`. |
@@ -352,7 +352,7 @@ where noted.
 | Med | Inline event draw / cap duplicated across scripts; freq-based cap | example scripts | Moved to core; **random** pool selection (Phase 2). |
 | Med | `read_impacts_dataset` assumed row order == object_id order | `setup_lookup_table.py` | `object_id`-indexed accessor + alignment assert (Phase 2). |
 | Med | Shared-engine `reset_state()` footgun | `mesa_native.py:174` | `state_epoch` guard + tests (PRE.3). |
-| Med | Gates only ran on the synthetic table | examples 05/06 | **PRE.2 CLOSED** — real-table gate PASS; interpolation bottleneck fixed (§9). |
+| Med | Gates only ran on the synthetic table | examples 05/06 | **PRE.2 CLOSED** — real-table gate PASS; interpolation bottleneck fixed (Sec.9). |
 | Med | V1–V6 battery ran on the old bridge API | `run_seu_validation.py` | Battery re-run + figures regenerated (VER.1); V5 nuance below. |
 | Med | V5 lifespan report said "GAP" though reset shipped | `05_lifespan.md` | Reset implemented + unit-tested on the engine; standalone-harness port is the VER.1 residual. |
 | Med | Stale root `README.md` | `README.md` | Rewritten (HYG.1); later extended with the performance section. |
@@ -371,12 +371,12 @@ state sharing) already retired in 4b-pre.
 
 ### 11.1 Phase 4b-pre — de-risking & hygiene — ✅ DONE (2026-07-09)
 
-PRE.1–4, HYG.1–4, VER.1–2 all closed (§7, §14). The 4b-pre gate is **OPEN** — 4b-full
+PRE.1–4, HYG.1–4, VER.1–2 all closed (Sec.7, Sec.14). The 4b-pre gate is **OPEN** — 4b-full
 proceeded.
 
 ### 11.2 Phase 4b-full — native-class integration — ✅ DONE (2026-07-09)
 
-Delivered as `floodadapt_abm/mesa_native_full.py` (§6.3). The chosen seam is
+Delivered as `floodadapt_abm/mesa_native_full.py` (Sec.6.3). The chosen seam is
 **native-class integration**: the real honeybees `Model` owns the tick loop and the native
 DYNAMO-M `DecisionModule` performs the decision math, while the population is fed from the
 FloodAdapt lookup table via the PRE.4 adapter and every numeric per-year operation is
@@ -394,7 +394,7 @@ This keeps the whole path bit-for-bit identical to the 4b scaffold and `engine.r
 
 Scope note: GLOFRIS/gravity CWD, `spin_up_flag`, low-memory `.npz` paging and the native
 reporter are intentionally **out of MVP scope**. 
-**Why don't we use the real DYNAMO-M geography setup?** Because we want to keep things lightweight. DYNAMO-M uses a complex geospatial data loading system (multi-gigabyte rasters for amenities, gravity models for population migration between municipalities, etc.). The objective of the `FloodAdapt-ABM` coupling is to build a fast Monte-Carlo simulator that strictly evaluates the SEU decision math against the FloodAdapt (SFINCS+FIAT) precomputed lookup table. By stripping out the heavy geospatial rasters, gravity models, and internal flood routing physics, the `FloodAdapt-ABM` simulator can execute tens of thousands of sequences per minute in parallel. Thus, the native `CoastalNode.step()` is too entangled with that heavy data ecosystem, so 4b-full reuses the validated engine kernel for the per-tick physics and the native `DecisionModule` for the decision math, inside a real honeybees `Model`. Those sub-systems remain available for a future full-geodata run (context in §12.3).
+**Why don't we use the real DYNAMO-M geography setup?** Because we want to keep things lightweight. DYNAMO-M uses a complex geospatial data loading system (multi-gigabyte rasters for amenities, gravity models for population migration between municipalities, etc.). The objective of the `FloodAdapt-ABM` coupling is to build a fast Monte-Carlo simulator that strictly evaluates the SEU decision math against the FloodAdapt (SFINCS+FIAT) precomputed lookup table. By stripping out the heavy geospatial rasters, gravity models, and internal flood routing physics, the `FloodAdapt-ABM` simulator can execute tens of thousands of sequences per minute in parallel. Thus, the native `CoastalNode.step()` is too entangled with that heavy data ecosystem, so 4b-full reuses the validated engine kernel for the per-tick physics and the native `DecisionModule` for the decision math, inside a real honeybees `Model`. Those sub-systems remain available for a future full-geodata run (context in Sec.12.3).
 
 ### 11.3 Phase 5 — extending decision rules (future)
 
@@ -406,7 +406,7 @@ rule/agent class, never engine surgery.
 | Phase | Deliverable | Exit criterion | Status |
 |---|---|---|---|
 | 0 | Green examples + reconciled config | Demos run; suite passes | ✅ PASS |
-| 1 | Validated SEU | §12.1 battery passes; SEU == DYNAMO-M within tol | ✅ PASS |
+| 1 | Validated SEU | Sec.12.1 battery passes; SEU == DYNAMO-M within tol | ✅ PASS |
 | 2 | Core event + time engine | No decision logic in example scripts | ✅ PASS |
 | 3 | `SimulationEngine` + rules | ThresholdRule reproduces legacy output; lifespan reset shipped | ✅ PASS |
 | 4a | Live DYNAMO-M SEU parity | `calcEU_*` parity within tol; import optional/guarded | ✅ PASS (EU abs 1.9e-6, rel 4.8e-7) |
@@ -422,7 +422,7 @@ Completed items retained for traceability.
 | Pri | Task | Phase | Status |
 |---|---|---|---|
 | P0 | Fix `cfg.environment.max_slr` crash; reconcile `DecisionConfig` docstring | 0 | DONE |
-| P1 | Validate SEU vs DYNAMO-M; run §12.1 battery | 1 | DONE |
+| P1 | Validate SEU vs DYNAMO-M; run Sec.12.1 battery | 1 | DONE |
 | P2 | Event drawing / time loop / accessor consolidation (random pool cap) | 2 | DONE |
 | P3 | `SimulationEngine` + `DecisionRule`; widened interface; lifespan reset | 3 | DONE |
 | P4a | Live DYNAMO-M `DecisionModule` parity oracle | 4a | DONE (gate PASS) |
@@ -445,7 +445,7 @@ Completed items retained for traceability.
 
 ## 14. Chronological progress log (day-by-day traceability)
 
-Each dated artifact referenced below is retained locally under `docs/progress/` (§18).
+Each dated artifact referenced below is retained locally under `docs/progress/` (Sec.18).
 
 ### 2026-07-07 → 2026-07-08 — Consolidation proposal & Phase 0–3 delivery
 - Authored the coupling MVP proposal and the Strategy-Pattern target architecture; reconciled doc/code drift (docstrings, event-cap semantics, method names).
@@ -461,7 +461,7 @@ Each dated artifact referenced below is retained locally under `docs/progress/` 
 
 ### 2026-07-09 (b) — PRE.2 real-table gate + engine speedups
 - Ran PRE.2 on the real 61,858 × 207 Charleston table; hit a full-scale interpolation bottleneck and fixed it with the per-SLR cube cache + `n_jobs` parallel sequences (commit `6f45d6f`, bit-identical). +5 tests → **125 pass**. Gate **PASS**.
-- Fixed a NumPy-2.0 `np.trapz` bug (`2035b80`). Recorded the work across `performed_tasks` §6.1 and the architecture docs.
+- Fixed a NumPy-2.0 `np.trapz` bug (`2035b80`). Recorded the work across `performed_tasks` Sec.6.1 and the architecture docs.
 
 ### 2026-07-09 (c) — Coupling-architecture relocation & docs reorg
 - Moved `coupling_architecture.md` into this repo's `docs/`, refreshed it (paths, 125 tests, PRE.2 gate, engine perf), and propagated the speedups into `README.md` and `examples_engine/README.md` (commit `673c535`).
@@ -552,7 +552,7 @@ are frozen under `docs/archive/`; their content is merged into this file.
 > **Subjective Expected Utility (SEU)** household decision framework, while
 > **keeping FloodAdapt-ABM's own household-elevation assumption** (damages of an
 > adapted household are read from the `floodproof_all_0` strategy in the lookup
-> table — see §1).
+> table — see Sec.1).
 
 > [!NOTE]
 > **Overruling of DYNAMO-M's Internal Hazard and Dike Mechanics**:
@@ -573,7 +573,7 @@ are frozen under `docs/archive/`; their content is merged into this file.
 | **Population / GDP growth** | ❌ Excluded | P1/P2 | ✅ income/wealth dynamics |
 | **Risk perception dynamics** | ✅ Exponential decay after flood | P4c | Same |
 | **SEU framework** | ✅ `calcEU_do_nothing()` + `calcEU_adapt()` | P4e | Add `calcEU_insure()` + `EU_migrate()` |
-| **Adaptation lifespan** | ✅ Enforced (`lifespan_dryproof` = 75 y, see §3.4) | P4e/§3.9 | Same |
+| **Adaptation lifespan** | ✅ Enforced (`lifespan_dryproof` = 75 y, see Sec.3.4) | P4e/Sec.3.9 | Same |
 | **Affordability constraint** | ✅ Enforced inside `calcEU_adapt` (`expenditure_cap`) | P4e | Same |
 
 ### Possible Extensions Beyond MVP
@@ -586,7 +586,7 @@ are frozen under `docs/archive/`; their content is merged into this file.
 
 Throughout this document **"household" = one `object_id` row in the lookup
 table = one residential building**. Non-residential FIAT objects are excluded
-from the SEU decision (see §2.5).
+from the SEU decision (see Sec.2.5).
 
 ---
 
@@ -618,7 +618,7 @@ deterministic, one-shot, reactive, and has no economic reasoning.
 - **The household-elevation assumption.** Once a household is floodproofed,
   damages are read from the **`floodproof_all_0`** strategy in the lookup table
   (a fixed elevation height defined at lookup-table creation). DYNAMO-M's own
-  "1 m dry-proofing" assumption is **not** imported — see §3.6.
+  "1 m dry-proofing" assumption is **not** imported — see Sec.3.6.
 - The lookup-table interpolation mechanism (`interpolate_damage_matrix()`).
 - The Monte-Carlo event-sequence generation (`generate_event_sequences()`).
 - The overall simulation loop in `_simulate_damage_history()` (baseline +
@@ -629,12 +629,12 @@ deterministic, one-shot, reactive, and has no economic reasoning.
 
 DYNAMO-M's SEU integrates utility over an **exceedance-probability curve**
 `p = 1 / return_period`, sorted ascending, integrated on `[0, 1]` via
-`np.trapz` (see §4.1). FloodAdapt-ABM stores `ds.event.attrs["freq"]` as
+`np.trapz` (see Sec.4.1). FloodAdapt-ABM stores `ds.event.attrs["freq"]` as
 **events/year**. For `p_floods = freq` to be a valid exceedance curve, the
 **stage-1 lookup table MUST be built from an `EventSet` whose sub-events are a
 true return-period set** — DYNAMO-M's canonical RPs are
 `[2, 5, 10, 25, 50, 100, 250, 500, 1000]` years
-(`input_data_requirements.md` §3.1, §7.1).
+(`input_data_requirements.md` Sec.3.1, Sec.7.1).
 
 > If a non-RP `EventSet` must be used, derive a per-household exceedance curve
 > by sorting events on each household's damage before calling the bridge. This
@@ -665,11 +665,11 @@ site (no existing FloodAdapt-ABM source).
 
 | Parameter | Provenance | DYNAMO-M source (`input_data_requirements.md`) | Default | Unit | Description |
 |-----------|-----------|------------------------------------------------|---------|------|-------------|
-| `income` | NEW | `gdl_income_2015.tif` + `mean_median_WIID.csv` + `adjusted_net_national_income_pc_*.csv` (§3.5–3.6) | — | USD/yr | Household annual income |
-| `income_percentile` | NEW | `households_gdl_2015/<size>/<geom_id>/income_percentile.npy` (§3.2) | — | 0–100 | Income-distribution position |
+| `income` | NEW | `gdl_income_2015.tif` + `mean_median_WIID.csv` + `adjusted_net_national_income_pc_*.csv` (Sec.3.5–3.6) | — | USD/yr | Household annual income |
+| `income_percentile` | NEW | `households_gdl_2015/<size>/<geom_id>/income_percentile.npy` (Sec.3.2) | — | 0–100 | Income-distribution position |
 | `wealth` | derived | `income × income_wealth_ratio(percentile)` | — | USD | Total wealth |
-| `property_value` | LUT | use FIAT `max_pot_dmg` (cap at wealth per `adaptation_decisions_complete.md` §5) | — | USD | Exposure / max damage |
-| `adaptation_costs` | NEW | `ECONOMY/PROCESSED/scaled_adaptation_cost.csv` → `model.data.adaptation_cost` (§3.5, §8.5) | — | USD/yr | Annual loan repayment for dry-proofing |
+| `property_value` | LUT | use FIAT `max_pot_dmg` (cap at wealth per `adaptation_decisions_complete.md` Sec.5) | — | USD | Exposure / max damage |
+| `adaptation_costs` | NEW | `ECONOMY/PROCESSED/scaled_adaptation_cost.csv` → `model.data.adaptation_cost` (Sec.3.5, Sec.8.5) | — | USD/yr | Annual loan repayment for dry-proofing |
 | `risk_aversion` (σ) | SET | `decisions.risk_aversion` | 1 | – | CRRA coefficient (σ=1 → log utility) |
 | `decision_horizon` (T) | SET | `decisions.decision_horizon` | 15 | yr | NPV planning horizon |
 | `time_discounting` (r) | SET | `decisions.time_discounting` | 0.032 | /yr | Discount rate |
@@ -710,7 +710,7 @@ minimum — the "availability heuristic". This replaces the static 0.3 threshold
 |-------|--------------------------|-------|-------------|
 | `expected_damages_no_adapt` | `damage_matrix_no_measures[:, :, ti]` | `(n_events, n_households)` | Damage per event/household, no adaptation |
 | `expected_damages_adapt` | `damage_matrix_floodproofing_all[:, :, ti]` | `(n_events, n_households)` | Damage per event/household, ABM elevation |
-| `p_floods` | `ds.event.attrs['freq']` (= `1/RP`, see §1.3) | `(n_events,)` | Exceedance probabilities |
+| `p_floods` | `ds.event.attrs['freq']` (= `1/RP`, see Sec.1.3) | `(n_events,)` | Exceedance probabilities |
 | `property_value` | `max_pot_dmg` | `(n_households,)` | Max potential damage per building |
 | `is_floodproofed` | internal state | `(n_households,)` bool | Current adaptation status |
 | `time_adapted` | internal counter | `(n_households,)` int16 | Years since adaptation |
@@ -870,7 +870,7 @@ class DynamoDecisionBridge:
     def evaluate_decisions(self, year_index: int) -> np.ndarray:
         # Uses the damage matrices cached by prepare_damage_arrays(); returns the
         # newly-adapting mask and updates self.is_adapted / self.time_adapted in place.
-        # (a) lifespan reset (A3 / §3.9)
+        # (a) lifespan reset (A3 / Sec.3.9)
         expired = self.time_adapted >= self._dec.lifespan_dryproof
         self.is_adapted[expired] = False
         self.time_adapted[expired] = 0
@@ -904,7 +904,7 @@ class DynamoDecisionBridge:
 
 ### 3.4 Adaptation lifespan (enforced)
 
-Per `adaptation_decisions_complete.md` §3.9, when `time_adapted` reaches
+Per `adaptation_decisions_complete.md` Sec.3.9, when `time_adapted` reaches
 `lifespan_dryproof` (75 y) the measure expires: `is_floodproofed → False`,
 `time_adapted → 0`, and the household re-decides next year. This is implemented
 in `evaluate_decisions` step (a) so adaptation is **not** permanent.
@@ -946,7 +946,7 @@ While the integral uses theoretical probabilities, the realized Monte Carlo even
 
 ### 3.8 Target Architecture — Strategy Pattern (Phase 2–3 Refactor)
 
-The bridge in §3.1–3.7 is the **validated MVP kernel** (Phase 1 complete). §3.8 records the
+The bridge in Sec.3.1–3.7 is the **validated MVP kernel** (Phase 1 complete). Sec.3.8 records the
 **endorsed target structure** that Phases 2–3 refactor toward. The rationale: `ABMSimulator`
 (legacy 0.3-threshold) and `DynamoDecisionBridge` (SEU) are the **same simulation engine with
 different decision rules** — NetCDF loading, damage interpolation, stochastic event drawing,
@@ -961,7 +961,7 @@ SimulationEngine (single class)
   ├── State tracking (is_adapted, damage_history, flood_timer, time_adapted)
   └── decision_rule: DecisionRule     ← pluggable
           ├── ThresholdRule   (dmg/max_pot_dmg > 0.3)          [legacy ABMSimulator]
-          ├── SEURule         (DYNAMO-M utility math, ported)  [current bridge, §3.3–4]
+          ├── SEURule         (DYNAMO-M utility math, ported)  [current bridge, Sec.3.3–4]
           └── DynamoLiveRule  (calls live DYNAMO-M DecisionModule)
                   ├── 4a: thin adapter / SEU parity oracle     [near-term, in-MVP]
                   └── 4b: full Mesa model.step() driving        [post-MVP]
@@ -995,7 +995,7 @@ class DecisionRule:
 2. The rule receives **both** per-event damage matrices at the current SLR (`damages_no_adapt`
    and `damages_adapt`) rather than a single matrix plus the realised damage, because the SEU is
    **ex-ante** — `calcEU_adapt` / `calcEU_do_nothing` each integrate a full exceedance curve
-   (see §3.7). The realised `damages_this_year` scalar is *also* passed so the ex-post
+   (see Sec.3.7). The realised `damages_this_year` scalar is *also* passed so the ex-post
    `ThresholdRule` retains its legacy semantics; `SEURule` ignores it.
 3. `adaptation_costs` (annualised loan repayment) is passed explicitly.
 4. Decision parameters (`r`, `sigma`, `loan_duration`, `expenditure_cap`, `amenity_weight`) are
@@ -1013,7 +1013,7 @@ class DecisionRule:
 | Decision logic | hardcoded in classes | pluggable `DecisionRule` |
 
 **Coupling contract (must stay stable across refactors).** Per `(sequence, year)` the engine
-performs the loop of §3.2; the REPLACED block is the only decision-specific part and is delegated
+performs the loop of Sec.3.2; the REPLACED block is the only decision-specific part and is delegated
 to the rule. The payloads that cross the engine↔rule boundary are fixed:
 
 | Direction | Payload | Shape |
@@ -1028,7 +1028,7 @@ to the rule. The payloads that cross the engine↔rule boundary are fixed:
 **Time progression.** In production the manual demo loop is discarded. Time is driven natively —
 first by `SimulationEngine.run()`/`step()`, and ultimately by DYNAMO-M's Mesa `model.step()` cycle
 calling the bridge each tick. Keeping the rule interface stable is what makes this migration
-non-breaking, and preserves the long-term reverse-coupling vision (§12.3).
+non-breaking, and preserves the long-term reverse-coupling vision (Sec.12.3).
 
 > **Design principles enforced:** *Single Responsibility* — the engine owns time & data, the rule
 > owns behaviour (no FloodAdapt or DYNAMO-M imports inside rule kernels). *Open/Closed* — new
@@ -1037,7 +1037,7 @@ non-breaking, and preserves the long-term reverse-coupling vision (§12.3).
 > bit-for-bit. *Vectorisation & JIT* — keep `_iterate_through_flood` `@njit`-able; no per-household
 > Python loops in hot paths.
 
-See §12.4 for the phased roadmap and the go/no-go gates that govern this refactor.
+See Sec.12.4 for the phased roadmap and the go/no-go gates that govern this refactor.
 
 ---
 
@@ -1236,7 +1236,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph FloodAdapt["FloodAdapt - Stage 1 (RP EventSet, see §1.3)"]
+    subgraph FloodAdapt["FloodAdapt - Stage 1 (RP EventSet, see Sec.1.3)"]
         FA_IN["Events(RP) x SLR x Strategies"] --> FA_RUN["Run SFINCS + FIAT"]
         FA_RUN --> FA_LUT["Lookup Table NetCDF<br/>max_pot_dmg, freq, primary_object_type"]
     end
@@ -1312,7 +1312,7 @@ flowchart TD
 |--------------------------|----------|---------------------|-----------|
 | `damage_matrix_no_measures[:, :, t]` | `interpolate_damage_matrix(..., 'no_measures')` | `expected_damages_no_adapt` | LUT |
 | `damage_matrix_floodproofing_all[:, :, t]` | `interpolate_damage_matrix(..., 'floodproof_all_0')` | `expected_damages_adapted` | LUT (ABM elevation) |
-| `ds_impacts.event.attrs['freq']` | lookup attr (RP set, §1.3) | `p_floods` | LUT |
+| `ds_impacts.event.attrs['freq']` | lookup attr (RP set, Sec.1.3) | `p_floods` | LUT |
 | `max_pot_dmg` | `ds_impacts.object_id.attrs['max_pot_dmg']` | `property_value` | LUT |
 | `primary_object_type` | `ds_impacts.object_id.attrs['primary_object_type']` | `is_residential` | LUT |
 | `is_floodproofed` | internal state | `is_floodproofed` | sim |
@@ -1324,7 +1324,7 @@ flowchart TD
 
 | Bridge output | → FloodAdapt-ABM | Note |
 |---------------|------------------|------|
-| `adapt_decision` (bool) | `is_floodproofed \|= adapt_decision` *then* lifespan reset inside bridge | adaptation no longer permanent (§3.4) |
+| `adapt_decision` (bool) | `is_floodproofed \|= adapt_decision` *then* lifespan reset inside bridge | adaptation no longer permanent (Sec.3.4) |
 | `risk_perception` (float) | stored for diagnostics | per (s, hh, t) |
 | `EU_adapt`, `EU_do_nothing` | `eu_history[s, :, t, :]` | analysis |
 
@@ -1701,7 +1701,7 @@ This economic growth provides a realistic wealth recovery mechanism that allows 
 ### Unchanged files
 | File | Reason |
 |------|--------|
-| `setup_lookup_table.py` | Lookup-table creation independent of decision logic — **but** the chosen `EventSet` must satisfy §1.3 (RP set) |
+| `setup_lookup_table.py` | Lookup-table creation independent of decision logic — **but** the chosen `EventSet` must satisfy Sec.1.3 (RP set) |
 | `1_create_lookup_table.ipynb` | No code change; ensure RP-based `EventSet` |
 
 ---
@@ -1741,7 +1741,7 @@ Gate result: `verification/real_table_gate/` → `gate_pass: True`
 (4b bit-parity + 4a subset parity on the real table).
 
 ### 12.3 Reverse coupling (context, not MVP)
-`adaptation_decisions_complete.md` §7 documents how an external flood model can
+`adaptation_decisions_complete.md` Sec.7 documents how an external flood model can
 *feed* DYNAMO-M (`coastal_node.damages`, `damages_dryproof_1m`). The long-term
 vision is bidirectional. **This MVP is the opposite direction**: DYNAMO-M acts
 as the *decision engine inside* FloodAdapt-ABM. Keep the bridge interface
@@ -1749,25 +1749,25 @@ as the *decision engine inside* FloodAdapt-ABM. Keep the bridge interface
 
 ### 12.4 Phased Development Roadmap & Go/No-Go Gates
 
-The Strategy-Pattern refactor (§3.8) is delivered in gated phases. **Guiding principle:** unify
+The Strategy-Pattern refactor (Sec.3.8) is delivered in gated phases. **Guiding principle:** unify
 the plumbing, keep the decision logic pluggable — but validate the science *before* the big
 refactor. The `ThresholdRule` path must never regress existing notebooks.
 
 **Readiness (as of 2026-07-09):** Phases 0–4b, 4b-pre **and 4b-full** are **delivered and
-gated**. Phase 1's §12.1 battery passes and the ported SEU matches native DYNAMO-M within
-tolerance (worst relative EU error 4.2e-7, tol 1e-4; see §12.1 and
+gated**. Phase 1's Sec.12.1 battery passes and the ported SEU matches native DYNAMO-M within
+tolerance (worst relative EU error 4.2e-7, tol 1e-4; see Sec.12.1 and
 `seu_verification_tests/`). The Strategy-Pattern engine (Phases 2–3), the Phase 4a
 live-parity oracle, the Phase 4b mesa-native driver and the **Phase 4b-full native-class
 integration** (real honeybees `Model` + native `DecisionModule`) all pass their gates, and
-**PRE.2 has been executed on the real Charleston table** (`gate_pass: True`; see §14.4).
+**PRE.2 has been executed on the real Charleston table** (`gate_pass: True`; see Sec.14.4).
 Remaining work is Phase 5 (new decision rules) plus optional full-geodata MVP wiring items.
 
 | Phase | Deliverable | Exit criterion (gate) | Status |
 |---|---|---|---|
 | 0 | Green examples + reconciled config | Both demos run; suite passes (now 147 tests) | ✅ done |
-| 1 | Validated SEU | §12.1 battery passes; SEU == DYNAMO-M within tol | ✅ done |
+| 1 | Validated SEU | Sec.12.1 battery passes; SEU == DYNAMO-M within tol | ✅ done |
 | **2** | **Core event + time engine** | **No decision logic left in example scripts; ThresholdRule regression exact** | ✅ done |
-| **3** | **SimulationEngine + rules** | **ThresholdRule reproduces legacy output; §12.1 battery re-passes** | ✅ done |
+| **3** | **SimulationEngine + rules** | **ThresholdRule reproduces legacy output; Sec.12.1 battery re-passes** | ✅ done |
 | 4a | Live DYNAMO-M SEU parity (in-MVP) | `calcEU_*` parity within tol; live import optional/guarded | ✅ done |
 | 4b | Mesa-native integration (scaffold) | `FloodAdaptSLRModel.step()` drives populations; reproduces `engine.run` bit-for-bit | ✅ done |
 | 4b-full | Native-class integration | Real honeybees `Model` + native `DecisionModule`; `run_mesa_native_full == run_mesa_native == engine.run` bit-for-bit | ✅ done |
@@ -1784,7 +1784,7 @@ derive `INITIAL_YEAR`/`TIME_HORIZON` from FloodAdapt SLR projection metadata. Ha
 histories match bit-for-bit (`rtol=1e-6`) before starting Phase 3.
 
 **Phase 3 — Unified SimulationEngine + DecisionRule (Strategy)** (4–5 days). Introduce
-`SimulationEngine`, `AgentState`, and the `DecisionRule` ABC (§3.8). Refactor `ThresholdRule` and
+`SimulationEngine`, `AgentState`, and the `DecisionRule` ABC (Sec.3.8). Refactor `ThresholdRule` and
 `SEURule` onto the interface; keep `ABMSimulator` and `DynamoDecisionBridge` as thin
 backwards-compatible wrappers so no notebook API breaks. Add `eu_history` and `is_residential` to
 engine state. **Implement persistent `time_adapted` tracking and the lifespan-dryproof reset**
@@ -1793,11 +1793,11 @@ engine state. **Implement persistent `time_adapted` tracking and the lifespan-dr
 `time_adapted=0` (`dynamo_decision_bridge.py:326`) so adaptation is permanent. Add
 `lifespan_dryproof` to `DecisionConfig`, increment `time_adapted` yearly for adapted agents, and
 in `should_adapt` compute `reset_mask = time_adapted >= lifespan_dryproof` to un-adapt and
-re-decide. **Gate (hard stop):** re-run the full §12.1 V1–V6 battery on the new engine — all must
+re-decide. **Gate (hard stop):** re-run the full Sec.12.1 V1–V6 battery on the new engine — all must
 pass (no science regression) — and confirm `2_simulate_adaptation.ipynb` runs unchanged.
 
 **Risk gates summary.** Both phase boundaries are **hard stops**: if the Phase-2 `ThresholdRule`
-regression or the Phase-3 §12.1 battery fails, halt and debug within that phase before proceeding.
+regression or the Phase-3 Sec.12.1 battery fails, halt and debug within that phase before proceeding.
 Keep a `pre_phase3_baseline` snapshot so any regression can be diffed quickly. Full task
 breakdown, dependency graph, and resource estimates: see the 20260708 roadmap doc and
 [`AGENTS.md`](AGENTS.md) "SEU Decision Science Validation & Test Configurations".
@@ -1824,7 +1824,7 @@ breakdown, dependency graph, and resource estimates: see the 20260708 roadmap do
 | File | Responsibility |
 |------|----------------|
 | `abm_simulator.py` | `ABMSimulator`: Monte-Carlo sequences, interpolation, sim loop, plots |
-| `setup_lookup_table.py` | Lookup-table creation via FloodAdapt API (RP EventSet, §1.3) |
+| `setup_lookup_table.py` | Lookup-table creation via FloodAdapt API (RP EventSet, Sec.1.3) |
 
 ### DYNAMO-M (source for ported logic & data contract)
 | File | Responsibility |
@@ -1832,9 +1832,9 @@ breakdown, dependency graph, and resource estimates: see the 20260708 roadmap do
 | `decision_module.py` | `calcEU_do_nothing`, `calcEU_adapt`, `IterateThroughFlood`, `sample_error_terms` |
 | `agents/coastal_nodes.py` | Household lifecycle, `move()`, `decide_household_strategy()` |
 | `hazards/flooding/flood_risk.py` | Risk-perception dynamics, stochastic floods |
-| `settings.yml` | Default parameter values (P-step bindings in `input_data_requirements.md` §8) |
-| `docs/adaptation_decisions_complete.md` | SEU math (§3), parameters (§4), P0–P6 flow (§2) |
-| `docs/input_data_requirements.md` | Input data contract, `model.data.<attr>` sources (§9 matrix) |
+| `settings.yml` | Default parameter values (P-step bindings in `input_data_requirements.md` Sec.8) |
+| `docs/adaptation_decisions_complete.md` | SEU math (Sec.3), parameters (Sec.4), P0–P6 flow (Sec.2) |
+| `docs/input_data_requirements.md` | Input data contract, `model.data.<attr>` sources (Sec.9 matrix) |
 | `docs/diagrams/class_diagram.mmd` | DYNAMO-M class diagram (source of truth) |
 | `docs/diagrams/flowchart_adaptation_decision.mmd` | DYNAMO-M decision flowchart |
 | `docs/diagrams/sequence_timestep.mmd` | DYNAMO-M per-timestep sequence |
@@ -1889,7 +1889,7 @@ FloodAdapt-ABM/
 │   ├── coastal_node_adapter.py            # Phase 4b: CoastalNode ↔ agent-state adapter
 │   ├── event_utils.py                     # stochastic event draw + cap (random selection)
 │   ├── abm_simulator.py                   # legacy Monte-Carlo simulator (thin wrapper)
-│   ├── setup_lookup_table.py              # lookup-table creation (RP EventSet, §1.3)
+│   ├── setup_lookup_table.py              # lookup-table creation (RP EventSet, Sec.1.3)
 │   └── _core/                             # shared, import-free numerical kernels
 │       ├── dynamo_decision_bridge.py      # ported SEU bridge + per-SLR interpolation cache
 │       └── lookup_utils.py                # SLR→damage interpolation kernel
@@ -1963,7 +1963,7 @@ phase4b_bit_parity_real_table:        True   # engine.run == mesa-native, bit-fo
 phase4a_parity_real_table_subset:     True   # ported SEURule == native DYNAMO-M (subset)
 ```
 Wall time (3 sequences × 30 years): parallel run A ≈ 73.7 s, mesa run B ≈ 119.4 s,
-per-tick mean ≈ 2.62 s — after the §12.2 interpolation-cache + `n_jobs` speedups
+per-tick mean ≈ 2.62 s — after the Sec.12.2 interpolation-cache + `n_jobs` speedups
 (per-tick interpolation ~5.5 s → ~1 s; first cube materialize ~24 s → ~3.6 s;
 parallel ≈ 1.4× and bit-identical).
 
@@ -1992,7 +1992,7 @@ ported into this bridge are based on:
 | **Dry flood-proofing** | Elevating a building to reduce damage (DYNAMO-M = 1 m; here = ABM `floodproof_all_0`) |
 | **Flood timer** | Years since last flood; drives risk-perception decay |
 | **Risk perception** | Multiplier on actual flood probability (availability heuristic) |
-| **P0–P6** | Canonical DYNAMO-M process-step IDs (shared with `input_data_requirements.md` §6) |
+| **P0–P6** | Canonical DYNAMO-M process-step IDs (shared with `input_data_requirements.md` Sec.6) |
 | **LUT** | FloodAdapt-ABM lookup table (`lookup_table_<site>_<event_set>.nc`) |
 
 ---

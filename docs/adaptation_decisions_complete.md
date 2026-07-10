@@ -29,7 +29,7 @@ Protection Standard) via a **Cost-Benefit Analysis (CBA)**.
 ## 2. Decision Flow (Per Timestep)
 
 > **Process step IDs (P0–P6).** The labels below are shared verbatim with
-> `input_data_requirements.md` §6 so the data ↔ parameter ↔ code ↔ process chain
+> `input_data_requirements.md` Sec.6 so the data ↔ parameter ↔ code ↔ process chain
 > is consistent across both documents. **P0 (Agent Initialization)** runs once at
 > model setup (`data.py::Data` loads all inputs; `agents/*` build the agents); the
 > remaining steps run every timestep inside `Model.step()`.
@@ -81,7 +81,7 @@ Protection Standard) via a **Cost-Benefit Analysis (CBA)**.
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Process Step ID Mapping (shared with `input_data_requirements.md` §6)
+### Process Step ID Mapping (shared with `input_data_requirements.md` Sec.6)
 
 | Step ID | Process name | Driver method | Primary code file / class |
 |---------|--------------|---------------|---------------------------|

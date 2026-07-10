@@ -186,7 +186,7 @@ DYNAMO-M `settings.yml`:
 | `amenity_weight` | `1.0` | weight on amenity value in NPV |
 | `error_interval` | `0.0` | half-width of uniform EU error (0 → deterministic) |
 | `income_to_wealth_ratio` | `4.14` | income→wealth multiplier when wealth absent |
-| `max_events_per_year` | `4` | cap on stochastic events per year (see §6) |
+| `max_events_per_year` | `4` | cap on stochastic events per year (see Sec.6) |
 | `lifespan_dryproof` | `75` | dry-floodproofing service life (years); triggers reset |
 
 Risk-perception law:

@@ -436,7 +436,7 @@ When coupling with the DYNAMO-M decision bridge (`DynamoDecisionBridge`), the fo
 
 ### SEU Decision Science Validation & Test Configurations
 
-The bridge's Subjective Expected Utility (SEU) decision module has been validated against DYNAMO-M's native `decision_module.py` and against known-good edge cases using a **reproducible Phase-1 validation battery** (see [`docs/architecture.md`](architecture.md) §12.1 for the full specification and design rationale). This subsection documents the test configurations so that:
+The bridge's Subjective Expected Utility (SEU) decision module has been validated against DYNAMO-M's native `decision_module.py` and against known-good edge cases using a **reproducible Phase-1 validation battery** (see [`docs/architecture.md`](architecture.md) Sec.12.1 for the full specification and design rationale). This subsection documents the test configurations so that:
 
 1. **Developers** can verify changes to `DecisionConfig` or `DynamoDecisionBridge.evaluate_decisions` without breaking the validated science.
 2. **Integration teams** understand what "correct SEU behaviour" means and can trace regressions to their source.
@@ -617,7 +617,7 @@ The Phase-1 validation covers **only the SEU decision kernel** (household risk p
 - **Dike government CBA**: Phase-beyond-MVP extension.
 - **Physical flood depths from live DYNAMO-M**: currently bypassed (use lookup table instead).
 
-The test configurations assume the **NetCDF lookup table is a true return-period set** (events at RP = 2, 5, 10, 25, 50, 100, 500 years). If a non-RP event catalogue is used, pre-process it to a damage-sorted exceedance curve (see [`docs/architecture.md`](architecture.md) §1.3).
+The test configurations assume the **NetCDF lookup table is a true return-period set** (events at RP = 2, 5, 10, 25, 50, 100, 500 years). If a non-RP event catalogue is used, pre-process it to a damage-sorted exceedance curve (see [`docs/architecture.md`](architecture.md) Sec.1.3).
 
 #### References
 
@@ -635,7 +635,7 @@ Pattern), so it drops straight into `SimulationEngine`.
 
 ### Purpose — automated parity oracle
 
-`DynamoLiveRule` is the executable form of the §12.1 "cross-check native" gate.
+`DynamoLiveRule` is the executable form of the Sec.12.1 "cross-check native" gate.
 It calls upstream `calcEU_do_nothing` / `calcEU_adapt` with the *same* arrays the
 bridge assembles, so a test can assert that the ported `SEURule` has **not
 drifted** from upstream. This replaces the manual parity snippet above with a
@@ -852,7 +852,7 @@ remain the shared decision kernels.
 ## Phase 4b-pre — de-risking & hygiene (2026-07-09, ✅ DONE)
 
 Post-review tasks executed before the 4b-full lift (full definitions and gate
-criteria: [`docs/architecture.md`](architecture.md) §11.1 / §7; per-day original retained locally in `docs/progress/proposed_architecture/`):
+criteria: [`docs/architecture.md`](architecture.md) Sec.11.1 / Sec.7; per-day original retained locally in `docs/progress/proposed_architecture/`):
 
 - **PRE.1** `verification/preflight_4b_full/` — throwaway env + import test
   pinning honeybees/mesa against the DYNAMO-M checkout (prepared; execute on
@@ -864,7 +864,7 @@ criteria: [`docs/architecture.md`](architecture.md) §11.1 / §7; per-day origin
   now materialized once and `prepare_damage_arrays` is memoised per `(SLR,
   method)`, and `SimulationEngine.run(n_jobs=...)` runs the independent
   Monte-Carlo sequences in parallel (bit-identical to `n_jobs=1`). See
-  `20260709_performed_tasks.md` §6.1.
+  `20260709_performed_tasks.md` Sec.6.1.
 - **PRE.3** shared-engine staleness guard — `SimulationEngine.state_epoch` +
   `FloodAdaptSLRModel._check_not_stale()`: stepping a model whose engine state
   was reset by a newer model (or `engine.run()`) raises instead of silently

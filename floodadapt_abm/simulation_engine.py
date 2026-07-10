@@ -234,7 +234,7 @@ class SimulationEngine:
         """
         Advance the simulation by one year for the live ``self.state``.
 
-        Sequence (mirrors architecture §3.2):
+        Sequence (mirrors architecture Sec.3.2):
         draw events → realised damage → flood-experience update →
         lifespan reset → rule decision → state bookkeeping.
 

@@ -4,7 +4,7 @@ coastal_node_adapter.py
 PRE.4 (Phase 4b-full pre-flight): prototype of the **lookup-table ->
 CoastalNode adapter** — the single genuinely new modelling artefact of the
 4b-full migration (roadmap step 3 in
-``docs/20260709_proposed_development_architecture_steps.md`` §7.2).
+``docs/20260709_proposed_development_architecture_steps.md`` Sec.7.2).
 
 In native DYNAMO-M each region is a ``CoastalNode`` holding per-household
 arrays (``node.n``, ``node.property_value``, ``node.damages_coastal_cells``,

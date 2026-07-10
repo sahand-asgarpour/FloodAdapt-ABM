@@ -159,14 +159,14 @@ class SEURule(DecisionRule):
 
     Wraps the *validated* SEU kernels ported into ``dynamo_decision_bridge``
     (``_calc_eu_do_nothing`` / ``_calc_eu_adapt``), so this rule produces the
-    same numbers that the Phase-1 §12.1 battery and the native-DYNAMO-M
+    same numbers that the Phase-1 Sec.12.1 battery and the native-DYNAMO-M
     cross-check validated.  An agent adapts when::
 
         EU_adapt > EU_do_nothing   and   not already adapted
 
     Affordability is *not* re-checked here: it is encoded inside
     ``_calc_eu_adapt`` as ``EU_adapt = -inf`` when the annualised cost exceeds
-    ``income * expenditure_cap`` (avoids logic drift — architecture §4.4).
+    ``income * expenditure_cap`` (avoids logic drift — architecture Sec.4.4).
 
     Parameters
     ----------
