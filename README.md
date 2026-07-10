@@ -127,6 +127,6 @@ Phase-gate evidence (reports, metrics, re-runnable harnesses) lives in [verifica
 ## Documentation
 
 - [examples_engine/README.md](examples_engine/README.md) — architecture & usage walkthrough
-- [docs/coupling_architecture.md](docs/coupling_architecture.md) — full FloodAdapt-ABM ↔ DYNAMO-M coupling architecture (MVP scope, SEU math, bridge signature, UML/sequence/data-flow diagrams, walkthrough, roadmap & gates)
+- [docs/architecture.md](docs/architecture.md) — the canonical design record detailing the coupling architecture, the SEU mathematical formulation, and the phase-gate history
+- [floodadapt_abm_documentation.md](floodadapt_abm_documentation.md) — the comprehensive API reference covering every module, class, and configuration dataclass
 - [docs/AGENTS.md](docs/AGENTS.md) — deep operational guide (data requirements, schema, gotchas, phase history)
-- [docs/20260709_proposed_development_architecture_steps.md](docs/20260709_proposed_development_architecture_steps.md) — current roadmap (4b-pre → 4b-full → Phase 5)
