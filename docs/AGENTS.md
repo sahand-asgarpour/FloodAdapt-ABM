@@ -877,7 +877,7 @@ criteria: [`docs/architecture.md`](architecture.md) Sec.11.1 / Sec.7; per-day or
   from the engine, and routes decisions back into `AgentState`.
 - **HYG.1–4** README rewrite, this AGENTS.md path cleanup + vendored
   `verification/`, CI (`.github/workflows/ci.yml`), engine-based notebook
-  (`3_simulate_adaptation_engine.ipynb`) + Markdown design record in `docs/`.
+  (`3_run_coupled_abm.ipynb`) + Markdown design record in `docs/`.
 - **VER.1 (open)** re-run the V1–V6 battery against `SimulationEngine` +
   `SEURule` (the vendored Phase-1 battery validated the original bridge path;
   its V5 "GAP" verdict predates the Phase-3 lifespan fix).

@@ -303,7 +303,7 @@ unaffected (`run_mesa_native` constructs models sequentially). +4 tests.
 | Real-table gate (PRE.2) | **Done / PASS** | `gate_pass: True` on the real 61,858 × 207 table (Sec.9). |
 | CI | **Present, green** | `.github/workflows/ci.yml`: matrix pytest + examples + vendored 4b gate. |
 | Test suite | **147 passing** | bridge, engine, rules, agent state, event utils, live-parity, mesa-native, mesa-native-full, perf. |
-| Notebook 2 (`2_simulate_adaptation.ipynb`) | Legacy path | Still uses `ABMSimulator`; the engine path is notebook `3_simulate_adaptation_engine.ipynb`. |
+| Notebook 2 (`2_simulate_adaptation.ipynb`) | Legacy path | Still uses `ABMSimulator`; the engine path is notebook `3_run_coupled_abm.ipynb`. |
 
 ## 9. Engine performance & the real-table gate (PRE.2)
 
