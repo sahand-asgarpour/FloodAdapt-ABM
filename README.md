@@ -52,12 +52,11 @@ FloodAdapt-ABM/
 │   ├── phase4b_mesa_native/            #   tick driver vs engine loop (bit-parity)
 │   ├── preflight_4b_full/              #   PRE.1: honeybees/mesa pinning kit
 │   └── real_table_gate/                #   PRE.2: gates on the real Charleston table
-├── docs/                               # design record (architecture, phase docs, AGENTS.md)
+├── docs/                               # design record (architecture, phase docs)
 ├── 1_create_lookup_table.ipynb         # stage 1: build the lookup table (SFINCS+FIAT)
 ├── 2_simulate_adaptation.ipynb         # stage 2 (legacy ABMSimulator path)
 ├── 3_run_coupled_abm.ipynb             # stage 2: ⭐ Coupled ABM guide (SimulationEngine + SEURule)
-├── pyproject.toml                      # package metadata & dependencies (primary)
-├── environment.yml                     # optional conda environment
+└── pyproject.toml                      # package metadata & dependencies (primary)
 ```
 ---
 
